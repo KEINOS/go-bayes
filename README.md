@@ -54,6 +54,11 @@ func Example() {
 }
 ```
 
+## Examples
+
+- [Training with a slice of boolean values](https://pkg.go.dev/github.com/KEINOS/go-bayes#example-Train-Bool)
+- [Training with a slice of int values](https://pkg.go.dev/github.com/KEINOS/go-bayes#example-Train-Int)
+
 ## License
 
 - MIT, Copyright (c) 2020 [KEINOS](https://github.com/KEINOS/) and the [go-bayes contributors](https://github.com/KEINOS/go-bayes/graphs/contributors).

@@ -142,6 +142,7 @@ func ExampleTrain_bool() {
 	// Output: OK
 }
 
+//nolint: funlen // This function is a little long and complex but leave it as is.
 func ExampleTrain_int() {
 	defer bayes.Reset()
 
@@ -186,6 +187,7 @@ func ExampleTrain_int() {
 		case Si:
 			return "Si"
 		}
+
 		return "Unknown"
 	}
 
@@ -202,7 +204,10 @@ func ExampleTrain_int() {
 		}
 
 		// Print the next note
-		noteID := bayes.GetClass(nextNote).(int)
+		noteID, ok := bayes.GetClass(nextNote).(int)
+		if !ok {
+			log.Fatal("Invalid class type")
+		}
 
 		fmt.Printf("Class: %v (ID: %v)\n", getNote(noteID), nextNote)
 	}

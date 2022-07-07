@@ -20,13 +20,22 @@ func Test_addClass(t *testing.T) {
 	for i, tt := range []struct {
 		input interface{}
 	}{
-		{-1234}, {12345},
+		{-1234},
+		{12345},
 		{uint(0xffffffffffffffff)},
-		{uint64(1)}, {uint32(1)}, {uint16(1)}, {uint(1)},
-		{int64(1)}, {int32(1)}, {int16(1)}, {int(0xff)},
-		{float64(1.0)}, {float32(1.0)},
+		{uint64(1)},
+		{uint32(1)},
+		{uint16(1)},
+		{uint(1)},
+		{int64(1)},
+		{int32(1)},
+		{int16(1)},
+		{int(0xff)},
+		{float64(1.0)},
+		{float32(1.0)},
 		{"foobar"},
-		{true}, {false},
+		{true},
+		{false},
 		{big.NewInt(9223372036854775807)},
 	} {
 		require.NotPanics(t, func() {
@@ -136,16 +145,16 @@ func Test_chopAndMergeBytes_missing(t *testing.T) {
 
 func Test_getBlake3(t *testing.T) {
 	for _, tt := range []struct {
-		input  []uint64
 		expect string
+		input  []uint64
 	}{
 		{
-			[]uint64{0x0},
 			"71e0a99173564931c0b8acc52d2685a8e39c64dc52e3d02390fdac2a12b155cb",
+			[]uint64{0x0},
 		},
 		{
-			[]uint64{0xffffffffffffffff},
 			"73919af90e1fee9f2c6585e4534a6fa9e04931c0090b9c7ab9e631b16d8c8da0",
+			[]uint64{0xffffffffffffffff},
 		},
 	} {
 		hashed, err := getBlake3(tt.input...)
@@ -305,20 +314,20 @@ func TestTrain_slice_of_unsupported_type(t *testing.T) {
 
 func Test_uint64ToByteArray(t *testing.T) {
 	for _, tt := range []struct {
-		input  uint64
 		expect []byte
+		input  uint64
 	}{
 		{
-			0x0,
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			0x0,
 		},
 		{
-			0xffffffffffffffff,
 			[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+			0xffffffffffffffff,
 		},
 		{
-			0xfffffffffffffff,
 			[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x0f},
+			0xfffffffffffffff,
 		},
 	} {
 		actual := uint64ToByteArray(tt.input)

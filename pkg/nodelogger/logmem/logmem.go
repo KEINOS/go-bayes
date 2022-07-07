@@ -1,5 +1,5 @@
 /*
-Package logmeme is an implementation of bayes.NodeLogger for memory-based logging.
+Package logmem is an implementation of bayes.NodeLogger for memory-based logging.
 */
 package logmem
 

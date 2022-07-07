@@ -114,7 +114,7 @@ linters-settings:
         sizeThreshold: 70
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
-    min-complexity: 10
+    min-complexity: 15
   godot:
     # check that each sentence starts with a capital letter
     capital: true

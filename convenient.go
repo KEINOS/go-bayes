@@ -27,9 +27,9 @@ const (
 	// StorageDefault is the default storage used by the predictor. Currently, it
 	// is an in-memory log (logmem package).
 	StorageDefault = MemoryStorage
-	// ScopeIdDefault is the default scope ID on creating an instance of the
+	// ScopeIDDefault is the default scope ID on creating an instance of the
 	// predictor.
-	ScopeIdDefault = uint64(0)
+	ScopeIDDefault = uint64(0)
 )
 
 var (
@@ -48,8 +48,8 @@ func init() {
 
 // _Class holds the class ID and the original value.
 type _Class struct {
-	ID  uint64
 	Raw any
+	ID  uint64
 }
 
 // ----------------------------------------------------------------------------
@@ -113,7 +113,7 @@ func Predict[T any](items []T) (classID uint64, err error) {
 func Reset() {
 	var err error
 
-	_predictor, err = New(_storage, ScopeIdDefault)
+	_predictor, err = New(_storage, ScopeIDDefault)
 	if err != nil {
 		panic(err)
 	}
@@ -131,7 +131,7 @@ func SetStorage(storage Storage) {
 
 // Train trains the predictor with the given items.
 //
-// Once the item appears in the training set, the item is added to the class list
+// Once the item appears in the training set, the item is added to the class list.
 func Train[T any](items []T) error {
 	if _predictor == nil {
 		Reset()

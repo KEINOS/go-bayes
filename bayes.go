@@ -42,9 +42,12 @@ type NodeLogger interface {
 type Storage int
 
 const (
-	UnknwonStorage Storage = iota // UnknwonStorage represents the unknown storage.
-	MemoryStorage                 // MemoryStorage represents the in-memory storage.
-	SQLite3Storage                // SQLite3Storage represents the SQLite3 as a storage.
+	// UnknwonStorage represents the unknown storage.
+	UnknwonStorage Storage = iota
+	// MemoryStorage represents the in-memory storage.
+	MemoryStorage
+	// SQLite3Storage represents the SQLite3 as a storage.
+	SQLite3Storage
 )
 
 // Type returns the type name of the storage.

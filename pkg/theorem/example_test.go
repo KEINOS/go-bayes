@@ -11,7 +11,7 @@ func ExampleBayes() {
 	// Bayes' theorem
 	x := 0.3 * 0.4
 	y := x + (1.-0.3)*0.5
-	expect := x / y
+	expect := x / y //nolint: ifshort // not using short syntax for readability
 
 	// Prior probability to be B.
 	PriorProbToB := 0.3

@@ -1,3 +1,7 @@
+<!-- markdownlint-disable MD041 -->
+[![Go Version](https://img.shields.io/badge/Go-1.18+-blue?logo=go)](https://github.com/KEINOS/go-bayes/blob/main/go.mod)
+[![Go Reference](https://pkg.go.dev/badge/github.com/KEINOS/go-bayes.svg)](https://pkg.go.dev/github.com/KEINOS/go-bayes)
+
 # go-bayes
 
 `github.com/KEINOS/go-bayes` is a Go package for Bayesian inference.
@@ -58,6 +62,14 @@ func Example() {
 
 - [Training with a slice of boolean values](https://pkg.go.dev/github.com/KEINOS/go-bayes#example-Train-Bool)
 - [Training with a slice of int values](https://pkg.go.dev/github.com/KEINOS/go-bayes#example-Train-Int)
+
+## Contribute
+
+[![golangci-lint](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml "Static Analysis")
+[![codecov](https://codecov.io/gh/KEINOS/go-bayes/branch/main/graph/badge.svg?token=k0VCclM4G7)](https://codecov.io/gh/KEINOS/go-bayes "Code Coverage")
+[![Go Report Card](https://goreportcard.com/badge/github.com/KEINOS/go-bayes)](https://goreportcard.com/report/github.com/KEINOS/go-bayes "View Report Card")
+
+- Any PullRequest for improvement are welcome!
 
 ## License
 

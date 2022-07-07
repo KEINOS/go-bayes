@@ -70,6 +70,7 @@ func Example() {
 [![Go Report Card](https://goreportcard.com/badge/github.com/KEINOS/go-bayes)](https://goreportcard.com/report/github.com/KEINOS/go-bayes "View Report Card")
 
 - Any PullRequest for improvement are welcome!
+- Branch to PR: `main` ([Draft PR](https://github.blog/2019-02-14-introducing-draft-pull-requests/) is recommended)
 
 ## License
 

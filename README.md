@@ -53,3 +53,7 @@ func Example() {
     // Next is: Mi (Class ID: 6586414841969023711)
 }
 ```
+
+## License
+
+- MIT, Copyright (c) 2020 [KEINOS](https://github.com/KEINOS/) and the [go-bayes contributors](https://github.com/KEINOS/go-bayes/graphs/contributors).

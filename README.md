@@ -79,3 +79,17 @@ func Example() {
 ## License
 
 - MIT, Copyright (c) 2020 [KEINOS](https://github.com/KEINOS/) and the [go-bayes contributors](https://github.com/KEINOS/go-bayes/graphs/contributors).
+
+---
+
+## Wishlist/Todo
+
+- [x] ~~100% code coverage for the current implementation~~
+- [x] ~~fix all golangci-lint issues for the current implementation~~
+- [x] ~~vulnerability scanning with CodeQL~~
+- [x] ~~feat CIs with GitHub Actions~~
+- [ ] feat benchmarking
+- [ ] testdata with big sized data
+- [ ] SQLite3 as a storage backend (implementation of [NodeLogger](https://pkg.go.dev/github.com/KEINOS/go-bayes#NodeLogger) with SQLite3)
+- [ ] more examples of use cases
+- [ ] simple command tool to train and predict

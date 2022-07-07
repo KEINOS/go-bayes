@@ -9,12 +9,13 @@ import (
 //  Type: NodeLogger
 // ----------------------------------------------------------------------------
 
-// NodeLogger is an interface for access log of a node.
+// NodeLogger is an interface to log the node's state. Here, node is something
+// in between the predecessor and the successor.
 //
-// Each uint64 argument is the node ID. Note that node ID is equivalent to an
-// item ID.
+// Each uint64 argument of the method is a node ID. Consider node IDs to be
+// equivalent to item IDs.
 type NodeLogger interface {
-	// ID returns the node ID of the current node.
+	// ID returns the ID of the logger.
 	ID() uint64
 	// Predict returns the probability of the next node to be toNodeB if the incoming
 	// node is fromNodeA.

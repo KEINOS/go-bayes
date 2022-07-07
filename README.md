@@ -89,6 +89,7 @@ func Example() {
 - [x] ~~vulnerability scanning with CodeQL~~
 - [x] ~~feat CIs with GitHub Actions~~
 - [ ] feat benchmarking
+- [ ] feat dumping the trained model to a file
 - [ ] testdata with big sized data
 - [ ] SQLite3 as a storage backend (implementation of [NodeLogger](https://pkg.go.dev/github.com/KEINOS/go-bayes#NodeLogger) with SQLite3)
 - [ ] more examples of use cases

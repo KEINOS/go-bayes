@@ -7,10 +7,10 @@ package theorem
 func Bayes(PriorPtoB, PriorPfromAtoB, PriorPNotFromAtoB float64) float64 {
 	// Bayes' theorem
 	x := PriorPtoB * PriorPfromAtoB
-	y := x + (1.-PriorPtoB)*PriorPNotFromAtoB
+	y := x + (float64(1)-PriorPtoB)*PriorPNotFromAtoB
 
-	if y == 0. {
-		return 0.
+	if y == float64(0) {
+		return float64(0)
 	}
 
 	return x / y

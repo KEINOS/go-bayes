@@ -3,13 +3,35 @@ package bayes_test
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/KEINOS/go-bayes"
 )
 
+// ============================================================================
+//  Helper Functions for Example
+// ============================================================================
+
+func getTempDir() (pathDir string, cleanUp func()) {
+	pathDir, err := os.MkdirTemp(os.TempDir(), "go-bayes-test-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return pathDir, func() {
+		os.RemoveAll(pathDir)
+	}
+}
+
+// ============================================================================
+//  Examples
+// ============================================================================
+
 func Example() {
-	// "Happy Birthday", the train data. The types of slices available for the
-	// training are as follows:
+	// Train data: "Happy Birthday"
+	// This train data is a slice of strings but it can be any other type of slice.
+	// Currently supported types are as follows:
 	//   bool, int, int16-int64, uint, uint16-uint64, float32, float64, string.
 	score := []string{
 		"So", "So", "La", "So", "Do", "Si",
@@ -33,6 +55,7 @@ func Example() {
 		{"So", "So", "La"},                               // --> So
 		{"So", "So", "So"},                               // --> Mi
 	} {
+		// Predict the next note from the intro
 		nextNoteID, err := bayes.Predict(intro)
 		if err != nil {
 			log.Fatal(err)
@@ -40,15 +63,46 @@ func Example() {
 
 		// Print the predicted next note
 		nextNoteString := bayes.GetClass(nextNoteID)
-
 		fmt.Printf("Next is: %v (Class ID: %v)\n", nextNoteString, nextNoteID)
 	}
+
+	// Store the trained model/data to a file
+	pathDir, cleanUp := getTempDir()
+	defer cleanUp() // clean up the temporary directory after the test
+
+	pathFile := filepath.Join(pathDir, "example.model")
+
+	err := bayes.Store(pathFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Reset the trained model again before loading the model from the file
+	bayes.Reset()
+
+	// Load the trained model from the file
+	err = bayes.Restore(pathFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Predict the next note from the introduction notes
+	nextNoteID, err := bayes.Predict(
+		[]string{"So", "So", "La", "So", "Do", "Si", "So", "So"},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print the predicted next note
+	fmt.Printf("Next is: %v (Class ID: %v)\n", bayes.GetClass(nextNoteID), nextNoteID)
 
 	// Output:
 	// Next is: So (Class ID: 10062876669317908741)
 	// Next is: La (Class ID: 17627200281938459623)
 	// Next is: So (Class ID: 10062876669317908741)
 	// Next is: Mi (Class ID: 6586414841969023711)
+	// Next is: La (Class ID: 17627200281938459623)
 }
 
 // ----------------------------------------------------------------------------
@@ -258,6 +312,43 @@ func ExampleTrain_string() {
 	// Class: La (ID: 17627200281938459623)
 	// Class: So (ID: 10062876669317908741)
 	// Class: Mi (ID: 6586414841969023711)
+}
+
+// ============================================================================
+//  Type: Storage
+// ============================================================================
+// ----------------------------------------------------------------------------
+//  Storage.IsUnknown()
+// ----------------------------------------------------------------------------
+
+func ExampleStorage_IsUnknown() {
+	if bayes.UnknwonStorage.IsUnknown() {
+		fmt.Println("Unknown")
+	}
+
+	if bayes.Storage(int(999999999)).IsUnknown() {
+		fmt.Println("Unknown")
+	}
+
+	// Output:
+	// Unknown
+	// Unknown
+}
+
+// ----------------------------------------------------------------------------
+//  Storage.String()
+// ----------------------------------------------------------------------------
+
+func ExampleStorage_String() {
+	// bayes.Storage type implements the Stringer interface.
+	fmt.Println(bayes.MemoryStorage)
+	fmt.Println(bayes.SQLite3Storage)
+	fmt.Println(bayes.UnknwonStorage)
+
+	// Output:
+	// in-memory
+	// SQLite3
+	// unknown
 }
 
 // ----------------------------------------------------------------------------

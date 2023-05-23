@@ -3,6 +3,7 @@ package bayes
 import (
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -198,6 +199,24 @@ func Test_getCRC32C(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
+//  isValidPath
+// ----------------------------------------------------------------------------
+
+func Test_isValidPath_golden(t *testing.T) {
+	pathDir := t.TempDir()
+	pathFile := filepath.Join(pathDir, "test.txt")
+
+	require.True(t, isValidPath(pathDir))
+	require.True(t, isValidPath(pathFile))
+}
+
+func Test_isValidPath_malformed_path(t *testing.T) {
+	badPath := "foo/bar"
+
+	require.False(t, isValidPath(badPath))
+}
+
+// ----------------------------------------------------------------------------
 //  New
 // ----------------------------------------------------------------------------
 
@@ -255,18 +274,25 @@ func TestPredict_not_initialized(t *testing.T) {
 //  Reset
 // ----------------------------------------------------------------------------
 
-func TestReset_panic(t *testing.T) {
+func TestReset_unknown_storage_type(t *testing.T) {
 	oldStorage := _storage
+	oldPredictor := _predictor
+	oldClasses := _classes
+
 	defer func() {
-		_storage = oldStorage // Recover object
+		// Recover objects
+		_storage = oldStorage
+		_predictor = oldPredictor
+		_classes = oldClasses
 	}()
 
 	// Mock the storage to unknown type
-	SetStorage(UnknwonStorage)
+	_storage = UnknwonStorage
 
-	assert.Panics(t, func() {
-		Reset()
-	}, "it should panic if the storage is unknown")
+	err := Reset()
+
+	require.Error(t, err, "it should be an error if the storage is unknown")
+	require.Contains(t, err.Error(), "failed to set the predictor")
 }
 
 // ----------------------------------------------------------------------------

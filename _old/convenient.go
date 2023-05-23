@@ -3,8 +3,10 @@ package bayes
 import (
 	"encoding/binary"
 	"hash/crc32"
+	"os"
 	"unsafe"
 
+	"github.com/KEINOS/go-bayes/pkg/dumptype"
 	"github.com/pkg/errors"
 	"github.com/zeebo/blake3"
 )
@@ -33,9 +35,10 @@ const (
 )
 
 var (
-	_predictor NodeLogger
 	_classes   map[uint64]_Class
+	_predictor NodeLogger
 	_storage   = StorageDefault
+	OldClasses map[uint64]_Class
 )
 
 func init() {
@@ -110,23 +113,60 @@ func Predict[T any](items []T) (classID uint64, err error) {
 }
 
 // Reset resets the train object.
-func Reset() {
+func Reset() error {
 	var err error
 
 	_predictor, err = New(_storage, ScopeIDDefault)
 	if err != nil {
-		panic(err)
+		return errors.Wrap(err, "failed to set the predictor")
 	}
 
+	OldClasses = _classes
 	_classes = make(map[uint64]_Class)
+
+	return nil
+}
+
+// Restore loads the data of the predictor from the given filePath.
+func Restore(pathFile string) error {
+	// Open the file.
+	fp, err := os.Open(pathFile)
+	if err != nil {
+		return errors.Wrap(err, "failed to open the file")
+	}
+	defer fp.Close()
+
+	_predictor, _ = New(_storage, ScopeIDDefault)
+	_classes = OldClasses
+
+	return errors.Wrap(_predictor.Restore(dumptype.GOB, fp), "failed to restore the predictor")
 }
 
 // SetStorage sets the storage used by the predictor. This won't affect the
 // predictors created via `New()`.
 //
 // Do not forget to `Reset()` the predictor after changing the storage.
-func SetStorage(storage Storage) {
-	_storage = storage
+func SetStorage(storageType Storage) error {
+	if storageType.IsUnknown() {
+		return errors.New("unknown storage type")
+	}
+
+	_storage = storageType
+
+	return nil
+}
+
+// Store saves the data of the predictor to the given filePath.
+func Store(pathFile string) error {
+	// Create the file.
+	fp, err := os.Create(pathFile)
+	if err != nil {
+		return errors.Wrap(err, "failed to open the file")
+	}
+	defer fp.Close()
+
+	// HERE THE CLASS MAP SHOULD NOT BE NIL
+	return errors.Wrap(_predictor.Store(dumptype.GOB, nil, fp), "failed to store the predictor")
 }
 
 // Train trains the predictor with the given items.
@@ -300,6 +340,28 @@ func getCRC32C(input []byte) []byte {
 	_, _ = crc32C.Write(input)
 
 	return crc32C.Sum(nil)
+}
+
+func isValidPath(path string) bool {
+	// Check if file already exists
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+
+	var d []byte
+
+	// Attempt to create it
+	err := os.WriteFile(path, d, 0644)
+	if err == nil {
+		// And delete it
+		err = os.Remove(path)
+	}
+
+	if err != nil {
+		return false
+	}
+
+	return true
 }
 
 // uint64ToByteArray converts an unsigned integer to a byte array in little endian.

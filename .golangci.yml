@@ -1,12 +1,26 @@
-# This file contains configuration options for GolangCI-Lint.
-# - Available linters see: https://golangci-lint.run/usage/linters/
-# - Sample of config see: https://golangci-lint.run/usage/configuration/#config-file
+# =============================================================================
+#  GolangCI-Lint Rules for the CI
+# =============================================================================
+#  This file contains configuration options for GolangCI-Lint. In case of PR,
+#  you need to pass these regulations before requesting a merge or code review.
+# -----------------------------------------------------------------------------
+#  IMPORTANT:
+#  Currntly to run golangci-lint on Go 1.18, you need to explicitly specify the
+#  go version as below:
+#    golangci-lnt --go=1.18 run
+#  * See: https://github.com/golangci/golangci-lint/issues/2649)
+# -----------------------------------------------------------------------------
+#  * Available linters see: https://golangci-lint.run/usage/linters/
+#  * Sample of config see: https://golangci-lint.run/usage/configuration/#config-file
 
 # options for analysis running
 run:
-  # include test files or not, default is true
+  # Required for Go 1.18+
+  go: '1.18'
+  # include test files or not, default is true.
   tests: true
 
+  # fail fast. fail as soon as it detects a problem.
   fast: true
 
   # list of build tags, all linters use it. Default is empty list.
@@ -39,65 +53,41 @@ output:
 
 # enabled linters. Conf settings follows.
 linters:
-  enable:
-    - deadcode # Finds unused code
-    - dogsled
-    - dupl
-    - errcheck # Errcheck is a program for checking for unchecked errors in go programs. These unchecked errors can be critical bugs in some cases
-    - funlen
-    - gocognit
-    #- gocritic
-    - gocyclo
-    - godot
-    - godox
-    - gofmt
-    - gofumpt     # Stricter gofmt
-    #- golint      # Deprecated. Use revive
-    - gosec       # Inspects source code for security problems
-    - gosimple    # Linter for Go source code that specializes in simplifying a code
-    - govet       # Vet examines Go source code and reports suspicious constructs, such as Printf calls whose arguments do not align with the format string
-    - ifshort
-    - ineffassign # Detects when assignments to existing variables are not used
-    - lll
-    - megacheck   # gosimple, staticcheck, unused
-    - misspell    # Find commonly misspelled English words in comments
-    - nakedret    # Limit naked returns in functions greater than a specified function length
-    - nestif      # Limit if statements nested deep
-    - nolintlint  # Don't allow 'nolint' annotation w/out a description
-    - nlreturn    # Requires a new line before return
-    - prealloc    # Finds slice declarations that could potentially be preallocated
-    - predeclared # Find code that shadows one of Go's predeclared identifiers
-    - revive      # Fast, configurable, extensible, flexible, and beautiful linter for Go. Drop-in replacement of golint
-    - staticcheck # Staticcheck is a go vet on steroids, applying a ton of static analysis checks
-    - structcheck # Finds unused struct fields
-    - stylecheck
-    - typecheck   # Like the front-end of a Go compiler, parses and type-checks Go code
-    - unconvert   # Detect unnecessary type conversions
-    - unused      # Checks Go code for unused constants, variables, functions and types
-    #- testpackage # Limit use unexported functions and methods from source code in tests
-    - thelper     # Enforce to call 't.Helper()' in the test helper function
-    - varcheck    # Finds unused global variables and constants
-    - whitespace  # Limit unnecessary newlines at the start and end of functions, if, for, etc
-    - wsl         # Enforce empty lines at the right places to make code more readable.
-
+  # Enable all available linters. (Default: false)
+  enable-all: true
+  disable:
+    # Disable deprecated linters due to be abandoned or archived projects.
+    - exhaustivestruct # Replaced by exhaustruct
+    - golint    # Replaced by revive. Though, it is recommended to test golint separetly.
+    - interfacer
+    - maligned  # Replaced by govet 'fieldalignment'
+    - scopelint # Replaced by exportloopref
+    # Currently disabled because of Go 1.18
+    - bodyclose
+    - contextcheck
+    - interfacer
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - tparallel
+    - unparam
+    - wastedassign
+    # Disabled by repository owner due to his convenience.
+    - gochecknoglobals # Disabled due to use of global variables
+    - paralleltest     # Currently disabled due to lack of thought about parallelism
+    - tagliatelle      # Disabled due to use of snake_cased JSON keys in tags
+    - testpackage      # Disabled due to test private functions in a package
+    - varnamelen       # Disabled due to ease reading in examples
 # settings of linters
 linters-settings:
-  dogsled:
-    # checks assignments with too many blank identifiers; default is 2
-    max-blank-identifiers: 2
   dupl:
     # tokens count to trigger issue, 150 by default
     threshold: 100
-  errcheck:
-    # report about not checking of errors in type assertions: `a := b.(MyStruct)`;
-    # default is false: such cases aren't reported by default.
-    check-type-assertions: true
-  funlen:
-    lines: 60
-    statements: 40
   gocognit:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
-    min-complexity: 10
+    min-complexity: 15
   gocritic:
     # Which checks should be enabled; can't be combined with 'disabled-checks';
     # See https://go-critic.github.io/overview#checks-overview

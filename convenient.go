@@ -79,6 +79,8 @@ func HashTrans[T any](transitions ...T) (uint64, error) {
 // Predict returns the next class ID inferred from the given items.
 //
 // To get the original value of the class, use `GetClass()`.
+//
+//nolint:nonamedreturns // named return is used for readability.
 func Predict[T any](items []T) (classID uint64, err error) {
 	if _predictor == nil {
 		return 0, errors.New("predictor is not initialized")
@@ -140,13 +142,13 @@ func Train[T any](items []T) error {
 	prevItem := uint64(0)
 	drill := []uint64{}
 
-	for i, itemRaw := range items {
+	for index, itemRaw := range items {
 		item, err := convAnyToUint64(itemRaw)
 		if err != nil {
 			return errors.Wrap(err, "failed during training iteration")
 		}
 
-		if i == 0 {
+		if index == 0 {
 			prevItem = item
 			drill = append(drill, item)
 
@@ -190,6 +192,7 @@ func Train[T any](items []T) error {
 //  Private functions
 // ----------------------------------------------------------------------------
 
+//nolint:varnamelen,cyclop
 func addClass(class uint64, raw any) {
 	switch v := raw.(type) {
 	case uint64:
@@ -222,12 +225,19 @@ func addClass(class uint64, raw any) {
 }
 
 // chopAndMergeBytes combines the two input as one in 8 byte length.
+//
+// The first 4 bytes of the input `a` will be used as the upper half of the
+// output, and the first 4 bytes of the input `b` will be used as the bottom
+// half of the output.
+//
+//nolint:varnamelen // short parameter name is readable enough
 func chopAndMergeBytes(a, b []byte) (uint64, error) {
 	if len(a) < 4 || len(b) < 4 {
 		return 0, errors.New("failed to combine bytes. Both of the input must be 4byte or more")
 	}
 
-	rawid := make([]byte, 8)
+	lenOut := 8
+	rawid := make([]byte, lenOut)
 
 	_ = copy(rawid, a)     // Upper half as hash
 	_ = copy(rawid[4:], b) // Bottom half as checksum
@@ -235,6 +245,7 @@ func chopAndMergeBytes(a, b []byte) (uint64, error) {
 	return binary.BigEndian.Uint64(rawid), nil
 }
 
+//nolint:varnamelen,cyclop
 func convAnyToUint64(i interface{}) (uint64, error) {
 	switch v := i.(type) {
 	case uint64:
@@ -276,6 +287,7 @@ func convAnyToUint64(i interface{}) (uint64, error) {
 func getBlake3[T any](inputs ...T) ([]byte, error) {
 	hasher := blake3.New()
 
+	//nolint:varnamelen // short name is readable here
 	for _, v := range inputs {
 		vv, err := convAnyToUint64(v)
 		if err != nil {

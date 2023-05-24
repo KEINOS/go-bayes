@@ -13,10 +13,12 @@ import (
 //  addClass
 // ----------------------------------------------------------------------------
 
+//nolint:paralleltest // disable parallel test due to global variable change
 func Test_addClass(t *testing.T) {
 	oldClasses := _classes
 	defer func() { _classes = oldClasses }()
 
+	//nolint:varnamelen // tt is short but descriptive
 	for i, tt := range []struct {
 		input interface{}
 	}{
@@ -53,6 +55,8 @@ func Test_addClass(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func Test_convAnyToUint64_error_cases(t *testing.T) {
+	t.Parallel()
+
 	for _, tt := range []interface{}{
 		nil,
 		big.NewInt(9223372036854775807),
@@ -69,6 +73,9 @@ func Test_convAnyToUint64_error_cases(t *testing.T) {
 }
 
 func Test_convAnyToUint64_golden(t *testing.T) {
+	t.Parallel()
+
+	//nolint:varnamelen // tt is short but descriptive
 	for _, tt := range []struct {
 		input  interface{}
 		expect uint64
@@ -101,7 +108,10 @@ func Test_convAnyToUint64_golden(t *testing.T) {
 //  chopAndMergeBytes
 // ----------------------------------------------------------------------------
 
+//nolint:varnamelen // short variable name is enough in this test
 func Test_chopAndMergeBytes_golden(t *testing.T) {
+	t.Parallel()
+
 	a := []byte{
 		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
@@ -123,7 +133,10 @@ func Test_chopAndMergeBytes_golden(t *testing.T) {
 	require.Equal(t, expect, actual)
 }
 
+//nolint:varnamelen // short variable name is enough in this test
 func Test_chopAndMergeBytes_missing(t *testing.T) {
+	t.Parallel()
+
 	a := []byte{
 		0x01, 0x02, 0x03,
 	}
@@ -144,6 +157,9 @@ func Test_chopAndMergeBytes_missing(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func Test_getBlake3(t *testing.T) {
+	t.Parallel()
+
+	//nolint:varnamelen // tt is short but descriptive
 	for _, tt := range []struct {
 		expect string
 		input  []uint64
@@ -173,6 +189,9 @@ func Test_getBlake3(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func Test_getCRC32C(t *testing.T) {
+	t.Parallel()
+
+	//nolint:varnamelen // tt is short but descriptive
 	for _, tt := range []struct {
 		input  []byte
 		expect []byte
@@ -202,6 +221,8 @@ func Test_getCRC32C(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestNew_unknown_storage_type(t *testing.T) {
+	t.Parallel()
+
 	trainer, err := New(UnknwonStorage, 0)
 
 	require.Error(t, err, "unknown storage type should be an error")
@@ -214,6 +235,7 @@ func TestNew_unknown_storage_type(t *testing.T) {
 //  Predict
 // ----------------------------------------------------------------------------
 
+//nolint:paralleltest // disable parallel test due to global variable change
 func TestPredict_slice_of_unsupported_type(t *testing.T) {
 	oldPredictor := _predictor
 	defer func() {
@@ -222,18 +244,19 @@ func TestPredict_slice_of_unsupported_type(t *testing.T) {
 		Reset() // Reset the predictor
 	}()
 
-	v, err := Predict([]big.Int{
+	classPredicted, err := Predict([]big.Int{
 		*big.NewInt(9223372036854775807),
 		*big.NewInt(9223372036854775807),
 		*big.NewInt(9223372036854775807),
 	})
 
 	require.Error(t, err, "it should be an error if the input is a slice of unsupported type")
-	require.Zero(t, v, "it should be zero on error")
+	require.Zero(t, classPredicted, "it should be zero on error")
 
 	assert.Contains(t, err.Error(), "failed to hash the flow")
 }
 
+//nolint:paralleltest // disable parallel test due to global variable change
 func TestPredict_not_initialized(t *testing.T) {
 	oldPredictor := _predictor
 	defer func() {
@@ -243,10 +266,10 @@ func TestPredict_not_initialized(t *testing.T) {
 	// Mock the singleton predictor
 	_predictor = nil
 
-	v, err := Predict([]byte{0x10})
+	classPredicted, err := Predict([]byte{0x10})
 
 	require.Error(t, err, "it should be an error if the predictor is not initialized")
-	require.Zero(t, v, "it should be zero on error")
+	require.Zero(t, classPredicted, "it should be zero on error")
 
 	assert.Contains(t, err.Error(), "predictor is not initialized")
 }
@@ -255,6 +278,7 @@ func TestPredict_not_initialized(t *testing.T) {
 //  Reset
 // ----------------------------------------------------------------------------
 
+//nolint:paralleltest // disable parallel test due to global variable change
 func TestReset_panic(t *testing.T) {
 	oldStorage := _storage
 	defer func() {
@@ -273,6 +297,7 @@ func TestReset_panic(t *testing.T) {
 //  Train
 // ----------------------------------------------------------------------------
 
+//nolint:paralleltest // disable parallel test due to global variable change
 func TestTrain_not_initialized(t *testing.T) {
 	oldPredictor := _predictor
 	defer func() {
@@ -289,6 +314,7 @@ func TestTrain_not_initialized(t *testing.T) {
 	require.NoError(t, err)
 }
 
+//nolint:paralleltest // disable parallel test due to global variable change
 func TestTrain_slice_of_unsupported_type(t *testing.T) {
 	oldPredictor := _predictor
 	defer func() {
@@ -313,6 +339,9 @@ func TestTrain_slice_of_unsupported_type(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func Test_uint64ToByteArray(t *testing.T) {
+	t.Parallel()
+
+	//nolint:varnamelen // tt is short but descriptive
 	for _, tt := range []struct {
 		expect []byte
 		input  uint64

@@ -110,7 +110,8 @@ func ExampleNew() {
 func ExampleTrain_bool() {
 	defer bayes.Reset()
 
-	// "Save Our Souls" Morse code
+	// "Save Our Souls" Morse code.
+	// In this case, the class is 2. Such as true and false.
 	codes := []bool{
 		true, true, true, // ... ==> S
 		false, false, false, // ___ ==> O
@@ -119,7 +120,7 @@ func ExampleTrain_bool() {
 
 	// Train
 	if err := bayes.Train(codes); err != nil {
-		log.Fatal(err)
+		log.Panic(err) // panic to defer Reset()
 	}
 
 	// Quiz
@@ -132,17 +133,23 @@ func ExampleTrain_bool() {
 	// Predict the next code
 	nextCode, err := bayes.Predict(quiz)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err) // panic to defer Reset()
 	}
 
-	if bayes.GetClass(nextCode).(bool) {
+	// Type assertion to bool since the type of the class is bool
+	classPredicted, ok := bayes.GetClass(nextCode).(bool)
+	if !ok {
+		log.Panic("Failed to convert the class to bool") // panic to defer Reset()
+	}
+
+	classExpected := true
+	if classExpected == classPredicted {
 		fmt.Println("OK")
 	}
-
 	// Output: OK
 }
 
-//nolint: funlen // This function is a little long and complex but leave it as is.
+//nolint:varnamelen,cyclop,funlen // long but simple example
 func ExampleTrain_int() {
 	defer bayes.Reset()
 
@@ -166,7 +173,7 @@ func ExampleTrain_int() {
 
 	// Train
 	if err := bayes.Train(score); err != nil {
-		log.Fatal(err)
+		log.Panic(err) // panic to defer Reset()
 	}
 
 	// Convert int to string that represents the note
@@ -200,13 +207,13 @@ func ExampleTrain_int() {
 	} {
 		nextNote, err := bayes.Predict(notes)
 		if err != nil {
-			log.Fatal(err)
+			log.Panic(err) // panic to defer Reset()
 		}
 
 		// Print the next note
 		noteID, ok := bayes.GetClass(nextNote).(int)
 		if !ok {
-			log.Fatal("Invalid class type")
+			log.Panic("Invalid class type") // panic to defer Reset()
 		}
 
 		fmt.Printf("Class: %v (ID: %v)\n", getNote(noteID), nextNote)
@@ -232,7 +239,7 @@ func ExampleTrain_string() {
 
 	// Train
 	if err := bayes.Train(score); err != nil {
-		log.Fatal(err)
+		log.Panic(err) // panic to defer Reset()
 	}
 
 	// Predict the next note
@@ -244,7 +251,7 @@ func ExampleTrain_string() {
 	} {
 		nextNote, err := bayes.Predict(notes)
 		if err != nil {
-			log.Fatal(err)
+			log.Panic(err) // panic to defer Reset()
 		}
 
 		// Print the next note

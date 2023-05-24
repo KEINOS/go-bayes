@@ -1,3 +1,4 @@
+//nolint:ireturn // returning interface is intentional
 package bayes
 
 import (
@@ -58,6 +59,7 @@ func (s Storage) Type() string {
 		return "in-memory"
 	case SQLite3Storage:
 		return "SQLite3"
+	case UnknwonStorage:
 	}
 
 	return "unknown"
@@ -72,8 +74,13 @@ func (s Storage) Type() string {
 // Use this function if you want to have more control over the NodeLogger
 // instance rather than using the convenient functions.
 func New(engine Storage, scopeID uint64) (NodeLogger, error) {
-	switch engine {
-	case MemoryStorage:
+	// Currently only MemoryStorage is supported. So disable switch statement
+	//
+	// switch engine {
+	// case MemoryStorage:
+	// 	return logmem.New(scopeID), nil
+	// }
+	if engine == MemoryStorage {
 		return logmem.New(scopeID), nil
 	}
 

@@ -7,11 +7,13 @@ import (
 )
 
 func TestNodeLog_zero_division(t *testing.T) {
-	n := New(12345)
+	t.Parallel()
 
-	require.Equal(t, n.Predict(1, 2), float64(0))
-	require.Equal(t, n.PriorPfromAtoB(1, 2), float64(0))
-	require.Equal(t, n.PriorPNotFromAtoB(1, 2), float64(0))
-	require.Equal(t, n.PriorPtoB(1), float64(0))
-	require.NotPanics(t, func() { n.Update(1, 2) })
+	nodeLog := New(12345)
+
+	require.Equal(t, nodeLog.Predict(1, 2), float64(0))
+	require.Equal(t, nodeLog.PriorPfromAtoB(1, 2), float64(0))
+	require.Equal(t, nodeLog.PriorPNotFromAtoB(1, 2), float64(0))
+	require.Equal(t, nodeLog.PriorPtoB(1), float64(0))
+	require.NotPanics(t, func() { nodeLog.Update(1, 2) })
 }

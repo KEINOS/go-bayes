@@ -1,3 +1,4 @@
+//nolint:varnamelen // short names are more readable in this case
 package logmem_test
 
 import (

@@ -49,3 +49,18 @@ linters:
   # Disable due to using singletons and init functions
   - gochecknoinits
   - gochecknoglobals
+linters-settings:
+  depguard:
+    rules:
+      main:
+        # List of allowed packages.
+        allow:
+          # Go standard library
+          - $gostd
+          # Required for hashsing
+          - github.com/zeebo/blake3
+          # Deprecated but required for simple error handling
+          - github.com/pkg/errors
+          # Required for testing
+          - github.com/KEINOS/go-bayes
+          - github.com/stretchr/testify

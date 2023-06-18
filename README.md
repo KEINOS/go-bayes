@@ -6,12 +6,27 @@
 
 `github.com/KEINOS/go-bayes` is a Go package for Bayesian inference.
 
-```go
+## Usage
+
+```sh
+# Download the module
 go get github.com/KEINOS/go-bayes
 ```
 
 ```go
+// Import the package
 import "github.com/KEINOS/go-bayes"
+```
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/KEINOS/go-bayes"
+)
 
 func Example() {
     // "Happy Birthday", the train data. The types of slices available for the
@@ -57,6 +72,8 @@ func Example() {
     // Next is: Mi (Class ID: 6586414841969023711)
 }
 ```
+
+- [View it online](https://go.dev/play/p/N2-0xNxAKp9) @ GoPlayground
 
 ## Examples
 

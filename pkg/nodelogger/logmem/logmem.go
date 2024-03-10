@@ -4,7 +4,7 @@ Package logmem is an implementation of bayes.NodeLogger for memory-based logging
 package logmem
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/KEINOS/go-bayes/pkg/theorem"
 )
@@ -102,7 +102,7 @@ func (n NodeLog) PriorPtoB(nodeB uint64) float64 {
 
 // String returns a string representation of the NodeLog which is the node ID.
 func (n NodeLog) String() string {
-	return fmt.Sprintf("%d", n.nodeID)
+	return strconv.FormatUint(n.nodeID, 10)
 }
 
 // Update updates the records of a node.

@@ -15,6 +15,8 @@ import (
 
 // NodeLog holds the records of a node. It is an implementation of bayes.NodeLogger
 // for memory-based logging.
+//
+//nolint:recvcheck // allow pointer receiver for setter method
 type NodeLog struct {
 	// FromAtoB is the number of accesses from node A to node B as map[A]map[B].
 	// A is the incoming access and B is the outgoing access.

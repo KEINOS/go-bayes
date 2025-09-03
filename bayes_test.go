@@ -16,6 +16,7 @@ import (
 //nolint:paralleltest // disable parallel test due to global variable change
 func Test_addClass(t *testing.T) {
 	oldClasses := _classes
+
 	defer func() { _classes = oldClasses }()
 
 	//nolint:varnamelen // tt is short but descriptive
@@ -41,10 +42,10 @@ func Test_addClass(t *testing.T) {
 		{big.NewInt(9223372036854775807)},
 	} {
 		require.NotPanics(t, func() {
-			addClass(uint64(i), tt.input)
+			addClass(uint64(i), tt.input) // #nosec
 		})
 
-		c := GetClass(uint64(i))
+		c := GetClass(uint64(i)) // #nosec
 
 		require.Equal(t, tt.input, c)
 	}
@@ -238,6 +239,7 @@ func TestNew_unknown_storage_type(t *testing.T) {
 //nolint:paralleltest // disable parallel test due to global variable change
 func TestPredict_slice_of_unsupported_type(t *testing.T) {
 	oldPredictor := _predictor
+
 	defer func() {
 		_predictor = oldPredictor // Recover object
 
@@ -259,6 +261,7 @@ func TestPredict_slice_of_unsupported_type(t *testing.T) {
 //nolint:paralleltest // disable parallel test due to global variable change
 func TestPredict_not_initialized(t *testing.T) {
 	oldPredictor := _predictor
+
 	defer func() {
 		_predictor = oldPredictor
 	}()
@@ -281,6 +284,7 @@ func TestPredict_not_initialized(t *testing.T) {
 //nolint:paralleltest // disable parallel test due to global variable change
 func TestReset_panic(t *testing.T) {
 	oldStorage := _storage
+
 	defer func() {
 		_storage = oldStorage // Recover object
 	}()
@@ -300,6 +304,7 @@ func TestReset_panic(t *testing.T) {
 //nolint:paralleltest // disable parallel test due to global variable change
 func TestTrain_not_initialized(t *testing.T) {
 	oldPredictor := _predictor
+
 	defer func() {
 		_predictor = oldPredictor // Recover object
 
@@ -317,6 +322,7 @@ func TestTrain_not_initialized(t *testing.T) {
 //nolint:paralleltest // disable parallel test due to global variable change
 func TestTrain_slice_of_unsupported_type(t *testing.T) {
 	oldPredictor := _predictor
+
 	defer func() {
 		_predictor = oldPredictor // Recover object
 

@@ -133,7 +133,11 @@ func SetStorage(storage Storage) {
 
 // Train trains the predictor with the given items.
 //
-// Once the item appears in the training set, the item is added to the class list.
+// Notes:
+//   - The context "train" here refers to updating the predictor's probability
+//     distribution based on the input items.
+//   - Once the item appears in the training set, the item is added to the class
+//     list.
 func Train[T any](items []T) error {
 	if _predictor == nil {
 		Reset()
@@ -247,6 +251,14 @@ func chopAndMergeBytes(a, b []byte) (uint64, error) {
 
 //nolint:varnamelen,cyclop
 func convAnyToUint64(i interface{}) (uint64, error) {
+	// Magic numbers
+	const (
+		// maxInt32 is the max positive value of int32.
+		maxInt32 = int(2147483647)
+		// minInt32 is the min negative value of int32.
+		minInt32 = int(-2147483648)
+	)
+
 	switch v := i.(type) {
 	case uint64:
 		return v, nil
@@ -257,13 +269,33 @@ func convAnyToUint64(i interface{}) (uint64, error) {
 	case uint:
 		return uint64(v), nil
 	case int64:
-		return uint64(v), nil
+		// Intentional: convert signed integer to unsigned preserving bit
+		// representation. Negative values will map to large uint64 values on
+		// two's complement architectures. This is intended for discrete ID
+		// generation and we explicitly mark it for security scanner as intended.
+		return uint64(v), nil // #nosec
 	case int32:
-		return uint64(v), nil
+		// Intentional: convert signed integer to unsigned preserving bit
+		// representation. Negative values will map to large uint64 values on
+		// two's complement architectures. This is intended for discrete ID
+		// generation and we explicitly mark it for security scanner as intended.
+		return uint64(v), nil // #nosec
 	case int16:
-		return uint64(v), nil
+		// Intentional: convert signed integer to unsigned preserving bit
+		// representation. Negative values will map to large uint64 values on
+		// two's complement architectures. This is intended for discrete ID
+		// generation and we explicitly mark it for security scanner as intended.
+		return uint64(v), nil // #nosec
 	case int:
-		return uint64(v), nil
+		if v >= minInt32 && v <= maxInt32 {
+			// Intentional: convert signed int to unsigned preserving 2's
+			// complement representation across the full 64-bit width. Negative
+			// values will map to large uint64 values. This is intended for
+			// discrete ID generation. Mark as intended for security scanner.
+			return uint64(v), nil // #nosec
+		}
+
+		return 0, errors.New("failed to convert to uint64. int out of range")
 	case float64:
 		return uint64(v), nil
 	case float32:
@@ -320,6 +352,7 @@ func uint64ToByteArray(num uint64) []byte {
 	arr := make([]byte, size)
 
 	for i := 0; i < size; i++ {
+		//nolint:gosec // Use of unsafe calls is intentional here
 		byt := *(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&num)) + uintptr(i)))
 		arr[i] = byt
 	}

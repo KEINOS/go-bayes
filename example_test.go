@@ -22,7 +22,8 @@ func Example() {
 	bayes.Reset()
 
 	// Train
-	if err := bayes.Train(score); err != nil {
+	err := bayes.Train(score)
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -119,7 +120,8 @@ func ExampleTrain_bool() {
 	}
 
 	// Train
-	if err := bayes.Train(codes); err != nil {
+	err := bayes.Train(codes)
+	if err != nil {
 		log.Panic(err) // panic to defer Reset()
 	}
 
@@ -172,7 +174,8 @@ func ExampleTrain_int() {
 	}
 
 	// Train
-	if err := bayes.Train(score); err != nil {
+	err := bayes.Train(score)
+	if err != nil {
 		log.Panic(err) // panic to defer Reset()
 	}
 
@@ -238,7 +241,8 @@ func ExampleTrain_string() {
 	}
 
 	// Train
-	if err := bayes.Train(score); err != nil {
+	err := bayes.Train(score)
+	if err != nil {
 		log.Panic(err) // panic to defer Reset()
 	}
 

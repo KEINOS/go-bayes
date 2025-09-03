@@ -1,66 +1,30 @@
-# This file contains configuration options for GolangCI-Lint.
-#
-# - It requires golangci-lint v1.52.0 or later.
-# - Available linters see: https://golangci-lint.run/usage/linters/
-# - Sample of config see: https://golangci-lint.run/usage/configuration/#config-file
-
-# Options for analysis running
+version: "2"
 run:
-  # Include test files.
-  tests: true
-  # Fail fast.
-  fast: true
-
-  # List of build tags, all linters use it. Default is empty list.
   build-tags:
     - golangci
-
-  # Which dirs to skip. Issues from them won't be reported.
-  skip-dirs:
-    - .github
-
-  # Allow multiple parallel golangci-lint instances running.
+  tests: true
   allow-parallel-runners: true
-
-# Output configuration options
-output:
-  format: colored-line-number
-
-  # Sorts results by: filepath, line and column
-  sort-results: true
-
-# Enabled all linters. Conf settings may follow.
 linters:
-  enable-all: true
+  default: all
   disable:
-  # Disable deprecated linters
-  - exhaustivestruct
-  - golint
-  - ifshort
-  - interfacer
-  - maligned
-  - scopelint
-  - structcheck
-  - varcheck
-  - deadcode
-  - nosnakecase
-  # Disable due to testing private functions
-  - testpackage
-  # Disable due to using singletons and init functions
-  - gochecknoinits
-  - gochecknoglobals
-linters-settings:
-  depguard:
-    rules:
-      main:
-        # List of allowed packages.
-        allow:
-          # Go standard library
-          - $gostd
-          # Required for hashsing
-          - github.com/zeebo/blake3
-          # Deprecated but required for simple error handling
-          - github.com/pkg/errors
-          # Required for testing
-          - github.com/KEINOS/go-bayes
-          - github.com/stretchr/testify
+    # Disable due to private function test
+    - testpackage
+    # Allow external packages due to the dependency
+    - depguard
+    # Disable due to new major version. Replaced by wsl_v5
+    - wsl
+    # Allow global variables
+    - gochecknoglobals
+    # Allow init functions
+    - gochecknoinits
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - .github$

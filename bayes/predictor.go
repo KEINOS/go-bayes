@@ -51,6 +51,7 @@ type Predictor struct {
 }
 
 // NewPredictor creates a new Predictor instance from config.
+// A nil config Hasher selects xxHash3.
 func NewPredictor(config PredictorConfig) (*Predictor, error) {
 	hasher := config.Hasher
 	if hasher == nil {

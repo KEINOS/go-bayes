@@ -8,7 +8,10 @@ import (
 	"github.com/KEINOS/go-bayes/bayes/nodelogger"
 )
 
-var errUnknownStorageEngineType = errors.New("unknown storage engine type")
+var (
+	errNewOptionNil             = errors.New("new option must not be nil")
+	errUnknownStorageEngineType = errors.New("unknown storage engine type")
+)
 
 // ----------------------------------------------------------------------------
 //  Type: NodeLogger
@@ -46,13 +49,26 @@ func (s Storage) Type() string {
 //  Constructor
 // ----------------------------------------------------------------------------
 
-// New returns a new Predictor instance.
-func New(engine Storage, scopeID uint64) (*Predictor, error) {
-	return NewPredictor(PredictorConfig{
+// New returns a new Predictor instance. With no options, New uses xxHash3.
+func New(engine Storage, scopeID uint64, options ...Option) (*Predictor, error) {
+	config := PredictorConfig{
 		Storage: engine,
 		ScopeID: scopeID,
 		Hasher:  nil,
-	})
+	}
+
+	for _, option := range options {
+		if option == nil {
+			return nil, errNewOptionNil
+		}
+
+		err := option(&config)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return NewPredictor(config)
 }
 
 // newNodeLogger creates a new NodeLogger instance based on the storage engine type.

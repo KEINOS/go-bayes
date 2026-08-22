@@ -156,6 +156,67 @@ func TestNew_returnsPredictorSupportingTypedSlices(t *testing.T) {
 	require.Equal(t, "Si", instance.GetClass(classID))
 }
 
+func TestNew_hasherOptions(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		options []Option
+		want    Hasher
+	}{
+		"default is xxhash3": {
+			options: nil,
+			want:    NewXXHash3Hasher(),
+		},
+		"explicit xxhash3": {
+			options: []Option{WithHasher("xxhash3")},
+			want:    NewDefaultHasher(),
+		},
+		"explicit blake3": {
+			options: []Option{WithHasher("blake3")},
+			want:    NewBlake3Hasher(),
+		},
+		"last option wins": {
+			options: []Option{WithHasher("blake3"), WithHasher("xxhash3")},
+			want:    NewXXHash3Hasher(),
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			predictor, err := New(MemoryStorage, 100, test.options...)
+			require.NoError(t, err)
+
+			actual, err := predictor.HashTrans(10, 11, 12)
+			require.NoError(t, err)
+
+			expected, err := test.want.HashTrans(10, 11, 12)
+			require.NoError(t, err)
+			require.Equal(t, expected, actual)
+		})
+	}
+}
+
+func TestNew_rejectsNilOption(t *testing.T) {
+	t.Parallel()
+
+	predictor, err := New(MemoryStorage, 100, nil)
+
+	require.ErrorIs(t, err, errNewOptionNil)
+	require.Nil(t, predictor)
+}
+
+func TestNew_rejectsInvalidHasherOption(t *testing.T) {
+	t.Parallel()
+
+	predictor, err := New(MemoryStorage, 100, WithHasher("sha256"))
+
+	require.Error(t, err)
+	require.Nil(t, predictor)
+	require.ErrorIs(t, err, errUnknownHasher)
+}
+
 // ----------------------------------------------------------------------------
 //  Predict
 // ----------------------------------------------------------------------------

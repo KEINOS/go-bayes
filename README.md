@@ -9,7 +9,7 @@
 ## Highlights
 
 - Constructor-based API with explicit dependencies via `New` and `NewPredictor`.
-- Deterministic transition hashing using BLAKE3-based default hasher.
+- Fast, deterministic transition hashing with xxHash3 by default and optional BLAKE3.
 - JSON serialization/deserialization support for predictor state.
 - In-memory storage backend optimized for deterministic tests and examples.
 
@@ -106,7 +106,8 @@ Use this when you want to save a trained model snapshot and restore it later.
 - `bayes/internal/theorem`: Core Bayes theorem computation.
 - `bayes/internal/nodeloggers/logmem`: In-memory transition counter and probability source.
 - `bayes/hasher`: Transition hasher interface.
-- `bayes/internal/hashers/blake3base`: Default hash implementation for flow IDs.
+- `bayes/internal/hashers/xxHash3base`: Default xxHash3 implementation for flow IDs.
+- `bayes/internal/hashers/blake3base`: Optional BLAKE3 implementation for flow IDs.
 - `bayes/nodelogger`: Public node logger interface used by `Predictor`.
 
 ```mermaid
@@ -114,7 +115,8 @@ flowchart TD
         A[bayes public API] --> B[internal/theorem]
     A --> C[internal/nodeloggers/logmem]
     A --> D[hasher]
-        D --> E[internal/hashers/blake3base]
+        D --> E[internal/hashers/xxHash3base]
+        D --> G[internal/hashers/blake3base]
     A --> F[nodelogger]
 ```
 
@@ -148,6 +150,17 @@ golangci-lint run --fix
 - Class: The original value stored behind an internal numeric ID.
 
 ## Advanced Configuration
+
+`New` uses xxHash3 by default. Select BLAKE3 when compatibility with BLAKE3
+flow IDs is required:
+
+```go
+predictor, err := bayes.New(
+    bayes.MemoryStorage,
+    42,
+    bayes.WithHasher("blake3"),
+)
+```
 
 Use `NewPredictor` when you need to inject a custom hasher or build a
 predictor from an explicit config object.

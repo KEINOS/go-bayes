@@ -143,6 +143,25 @@ func ExampleNew() {
 	// Output: 100
 }
 
+func ExampleWithHasher() {
+	predictor, err := bayes.New(
+		bayes.MemoryStorage,
+		100,
+		bayes.WithHasher("blake3"),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	flowID, err := predictor.HashTrans(10, 11, 12, 13, 14, 15)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(flowID)
+	// Output: 7573192273568316974
+}
+
 // ----------------------------------------------------------------------------
 
 func ExampleStorage_Type() {

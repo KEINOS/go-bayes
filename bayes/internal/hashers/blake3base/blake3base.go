@@ -1,4 +1,4 @@
-// Package blake3base provides the default transition hasher implementation.
+// Package blake3base provides the BLAKE3 transition hasher implementation.
 package blake3base
 
 import (
@@ -17,10 +17,10 @@ var errInvalidBytesLength = errors.New(
 // Compile-time check that *Hasher satisfies hasher.TransitionHasher.
 var _ hasher.TransitionHasher = (*Hasher)(nil)
 
-// Hasher implements the default transition hashing algorithm.
+// Hasher implements the BLAKE3 transition hashing algorithm.
 type Hasher struct{}
 
-// New returns a new default hasher.
+// New returns a new BLAKE3 transition hasher.
 func New() *Hasher {
 	return &Hasher{}
 }

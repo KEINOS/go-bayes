@@ -3,7 +3,7 @@ package theorem_test
 import (
 	"fmt"
 
-	"github.com/KEINOS/go-bayes/pkg/theorem"
+	"github.com/KEINOS/go-bayes/bayes/internal/theorem"
 )
 
 func ExampleBayes() {
@@ -25,6 +25,6 @@ func ExampleBayes() {
 	if expect == actual {
 		fmt.Println("OK")
 	}
-
+	//
 	// Output: OK
 }

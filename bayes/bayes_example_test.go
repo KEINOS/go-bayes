@@ -1,0 +1,155 @@
+package bayes_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+
+	"github.com/KEINOS/go-bayes/bayes"
+)
+
+func Example() {
+	score := []string{
+		"So", "So", "La", "So", "Do", "Si",
+		"So", "So", "La", "So", "Re", "Do",
+		"So", "So", "So", "Mi", "Do", "Si", "La",
+		"Fa", "Fa", "Mi", "Do", "Re", "Do",
+	}
+
+	scopeID := uint64(100)
+
+	foo, err := bayes.New(bayes.MemoryStorage, scopeID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = foo.Train(score)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	nextNoteID, err := foo.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	nextNoteString := foo.GetClass(nextNoteID)
+
+	fmt.Printf("Next is: %v (Class ID: %v)\n", nextNoteString, nextNoteID)
+	//
+	// Output:
+	// Next is: So (Class ID: 10062876669317908741)
+}
+
+//nolint:funlen // allow long function due to example
+func Example_iris() {
+	// Prepare the iris dataset for training and prediction.
+	type irisData struct {
+		Data   [][4]float64 `json:"data"`
+		Target []float64    `json:"target"`
+	}
+
+	loadIrisData := func() (irisData, error) {
+		pathJSON := filepath.Join("..", "testdata", "iris.json")
+		pathJSON = filepath.Clean(pathJSON)
+
+		jsonFile, err := os.Open(pathJSON)
+		if err != nil {
+			return irisData{}, fmt.Errorf("failed to open iris testdata: %w", err)
+		}
+
+		defer func() {
+			_ = jsonFile.Close()
+		}()
+
+		var dataset irisData
+
+		err = json.NewDecoder(jsonFile).Decode(&dataset)
+		if err != nil {
+			return irisData{}, fmt.Errorf("failed to decode iris testdata: %w", err)
+		}
+
+		return dataset, nil
+	}
+
+	// Load the iris dataset from the JSON file.
+	iris, err := loadIrisData()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Create a new classifier (predictor) with in-memory storage and a unique scope ID.
+	classifierID := uint64(4)
+
+	predictor, err := bayes.New(bayes.MemoryStorage, classifierID)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Train the predictor with the iris dataset.
+	// Each row consists of 4 features followed by the target class.
+	for i, row := range iris.Data {
+		// Sepal length, sepal width, petal length, petal width, and target class.
+		drill := []float64{row[0], row[1], row[2], row[3], iris.Target[i]}
+
+		err := predictor.Train(drill)
+		if err != nil {
+			log.Panic(err)
+		}
+	}
+
+	// Predict the class for a new data point.
+	// [0] = sepal length, [1] = sepal width, [2] = petal length, [3] = petal width.
+	predictedID, err := predictor.Predict([]float64{5.1, 3.5, 1.4, 0.2})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Retrieve the predicted class name.
+	class, ok := predictor.GetClass(predictedID).(float64)
+	if !ok {
+		log.Panic("unexpected class type")
+	}
+
+	species := map[float64]string{
+		0: "setosa",
+		1: "versicolor",
+		2: "virginica",
+	}
+
+	fmt.Println(species[class])
+	//
+	// Output: setosa
+}
+
+// ----------------------------------------------------------------------------
+//  New()
+// ----------------------------------------------------------------------------
+
+func ExampleNew() {
+	// Scope ID is used to distinguish the stored data.
+	scopeID := uint64(100)
+
+	// Create a new bayes instance with in-memory storage.
+	predictor, err := bayes.New(bayes.MemoryStorage, scopeID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(predictor.ID())
+	//
+	// Output: 100
+}
+
+// ----------------------------------------------------------------------------
+
+func ExampleStorage_Type() {
+	fmt.Println(bayes.MemoryStorage.Type())
+	fmt.Println(bayes.UnknownStorage.Type())
+	//
+	// Output:
+	// in-memory
+	// unknown
+}

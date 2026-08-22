@@ -1,9 +1,8 @@
 module github.com/KEINOS/go-bayes
 
-go 1.18
+go 1.26
 
 require (
-	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.11.1
 	github.com/zeebo/blake3 v0.2.4
 )

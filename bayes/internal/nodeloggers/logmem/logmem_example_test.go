@@ -4,14 +4,14 @@ package logmem_test
 import (
 	"fmt"
 
-	"github.com/KEINOS/go-bayes/pkg/nodelogger/logmem"
+	"github.com/KEINOS/go-bayes/bayes/internal/nodeloggers/logmem"
 )
 
 func ExampleNodeLog_ID() {
 	n := logmem.New(12345)
 
 	fmt.Println(n.ID())
-
+	//
 	// Output: 12345
 }
 
@@ -32,14 +32,14 @@ func ExampleNodeLog_Predict() {
 	fmt.Println("Prediction of outgoing node to be x, on incoming node as x:", nodeY.Predict(x, x))
 	fmt.Println("Prediction of outgoing node to be y, on incoming node as x:", nodeY.Predict(x, y))
 	fmt.Println("Prediction of outgoing node to be z, on incoming node as x:", nodeY.Predict(x, z))
-
+	//
 	// Output:
 	// Prediction of outgoing node to be x, on incoming node as x: 0
 	// Prediction of outgoing node to be y, on incoming node as x: 0
 	// Prediction of outgoing node to be z, on incoming node as x: 1
 }
 
-func ExampleNodeLog_PriorPfromAtoB() {
+func ExampleNodeLog_PriorProbFromTo() {
 	const (
 		x = uint64(1) // Node ID of node x
 		y = uint64(2) // Node ID of node y
@@ -54,19 +54,19 @@ func ExampleNodeLog_PriorPfromAtoB() {
 	nodeY.Update(z, x) // from z to x (z -> y -> x) This should be called from node x.
 
 	fmt.Println("Prior probability of outgoing node x, on incoming node as x (x -> y -> x):",
-		nodeY.PriorPfromAtoB(x, x))
+		nodeY.PriorProbFromTo(x, x))
 	fmt.Println("Prior probability of outgoing node y, on incoming node as x (x -> y -> y):",
-		nodeY.PriorPfromAtoB(x, y))
+		nodeY.PriorProbFromTo(x, y))
 	fmt.Println("Prior probability of outgoing node z, on incoming node as x (x -> y -> z):",
-		nodeY.PriorPfromAtoB(x, z))
-
+		nodeY.PriorProbFromTo(x, z))
+	//
 	// Output:
 	// Prior probability of outgoing node x, on incoming node as x (x -> y -> x): 0
 	// Prior probability of outgoing node y, on incoming node as x (x -> y -> y): 0
 	// Prior probability of outgoing node z, on incoming node as x (x -> y -> z): 0.5
 }
 
-func ExampleNodeLog_PriorPNotFromAtoB() {
+func ExampleNodeLog_PriorProbNotFromTo() {
 	const (
 		x = uint64(1) // Node ID of node x
 		y = uint64(2) // Node ID of node y
@@ -81,19 +81,19 @@ func ExampleNodeLog_PriorPNotFromAtoB() {
 	nodeY.Update(z, x) // from z to x (z -> y -> x) This should be called from node x.
 
 	fmt.Println("Prior probability of outgoing node is not x, on incoming node as x (x -> y -> not x):",
-		nodeY.PriorPNotFromAtoB(x, x))
+		nodeY.PriorProbNotFromTo(x, x))
 	fmt.Println("Prior probability of outgoing node is not y, on incoming node as x (x -> y -> not y):",
-		nodeY.PriorPNotFromAtoB(x, y))
+		nodeY.PriorProbNotFromTo(x, y))
 	fmt.Println("Prior probability of outgoing node is not z, on incoming node as x (x -> y -> not z):",
-		nodeY.PriorPNotFromAtoB(x, z))
-
+		nodeY.PriorProbNotFromTo(x, z))
+	//
 	// Output:
 	// Prior probability of outgoing node is not x, on incoming node as x (x -> y -> not x): 0.5
 	// Prior probability of outgoing node is not y, on incoming node as x (x -> y -> not y): 0.5
 	// Prior probability of outgoing node is not z, on incoming node as x (x -> y -> not z): 0
 }
 
-func ExampleNodeLog_PriorPtoB() {
+func ExampleNodeLog_PriorProbTo() {
 	const (
 		x = uint64(1)
 		y = uint64(2)
@@ -107,10 +107,10 @@ func ExampleNodeLog_PriorPtoB() {
 	nodeY.Update(x, z) // from x to z (x -> y -> z) This should be called from node z.
 	nodeY.Update(z, x) // from z to x (z -> y -> x) This should be called from node x.
 
-	fmt.Println("Prior probability of outgoing node x (y -> x):", nodeY.PriorPtoB(x))
-	fmt.Println("Prior probability of outgoing node y (y -> y):", nodeY.PriorPtoB(y))
-	fmt.Println("Prior probability of outgoing node z (y -> z):", nodeY.PriorPtoB(z))
-
+	fmt.Println("Prior probability of outgoing node x (y -> x):", nodeY.PriorProbTo(x))
+	fmt.Println("Prior probability of outgoing node y (y -> y):", nodeY.PriorProbTo(y))
+	fmt.Println("Prior probability of outgoing node z (y -> z):", nodeY.PriorProbTo(z))
+	//
 	// Output:
 	// Prior probability of outgoing node x (y -> x): 0.5
 	// Prior probability of outgoing node y (y -> y): 0
@@ -122,7 +122,7 @@ func ExampleNodeLog_String() {
 
 	// Stringer implementation for the NodeLog type.
 	fmt.Println(n)
-
+	//
 	// Output: 12345
 }
 
@@ -146,16 +146,31 @@ func ExampleNodeLog_Update() {
 	// node z should call this function.
 	nodeY.Update(x, z)
 
-	fmt.Println("Total access:", nodeY.TotalAccesses)
-	fmt.Println("Number of access from node x:", nodeY.FromA[x])
-	fmt.Println("Number of access from node z:", nodeY.FromA[z])
-	fmt.Println("Number of outgoing node x:", nodeY.ToB[x])
-	fmt.Println("Number of outgoing node z:", nodeY.ToB[z])
-
+	fmt.Println("Total access:", nodeY.TotalAccesses())
+	fmt.Println("Number of access from node x:", nodeY.FromCount(x))
+	fmt.Println("Number of access from node z:", nodeY.FromCount(z))
+	fmt.Println("Number of outgoing node x:", nodeY.ToCount(x))
+	fmt.Println("Number of outgoing node z:", nodeY.ToCount(z))
+	//
 	// Output:
 	// Total access: 1
 	// Number of access from node x: 1
 	// Number of access from node z: 0
 	// Number of outgoing node x: 0
 	// Number of outgoing node z: 1
+}
+
+func ExampleNodeLog_Snapshot() {
+	nodeLog := logmem.New(42)
+	nodeLog.Update(1, 2)
+
+	snapshot := nodeLog.Snapshot()
+	restored := logmem.NewFromSnapshot(snapshot)
+
+	fmt.Println(snapshot.NodeID, snapshot.TotalAccesses, snapshot.FromA[1], snapshot.ToB[2])
+	fmt.Println(restored.ID(), restored.TotalAccesses(), restored.FromCount(1), restored.ToCount(2))
+
+	// Output:
+	// 42 1 1 1
+	// 42 1 1 1
 }

@@ -1,30 +1,22 @@
 version: "2"
 run:
-  build-tags:
-    - golangci
   tests: true
   allow-parallel-runners: true
 linters:
   default: all
   disable:
-    # Disable due to private function test
-    - testpackage
-    # Allow external packages due to the dependency
-    - depguard
-    # Disable due to new major version. Replaced by wsl_v5
+    # Deprecated linters
     - wsl
-    # Allow global variables
-    - gochecknoglobals
-    # Allow init functions
-    - gochecknoinits
-
-formatters:
-  enable:
-    - gci
-    - gofmt
-    - gofumpt
-    - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - .github$
+    - gomodguard
+    - exhaustruct
+    # Disabled by project policy
+    - depguard
+    - testpackage
+  settings:
+    paralleltest:
+      ignore-missing: false
+    varnamelen:
+      ignore-names:
+        - ok
+        - t
+        - tt

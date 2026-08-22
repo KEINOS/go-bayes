@@ -15,9 +15,9 @@ func TestBayes_zero_division(t *testing.T) {
 }
 
 // Fuzzing test.
-// Fom the root of the project, run:
+// From the root of the project, run:
 //
-//	go test -fuzz=FuzzBayes ./pkg/theorem
+//	go test -fuzz=FuzzBayes ./bayes/internal/theorem
 func FuzzBayes(f *testing.F) {
 	f.Add(float64(0.3), float64(0.4), float64(0.5))
 	f.Add(float64(0.), float64(0.), float64(0.))

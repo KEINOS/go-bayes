@@ -50,11 +50,16 @@ flowchart TD
 
 Read the [technical specification](../SPEC.md) before changing context folding, training expansion, scoring, or class recovery.
 
-## Branch And PR Conventions
+## Reporting Bugs
+
+Open an issue when you find a bug. When possible, include a small test or program that reproduces it. Reproduction code helps us confirm the problem and respond faster.
+
+## Branch and Pull Request Conventions
 
 Use short branch names prefixed by intent: `fix/...`, `feat/...`, `docs/...`, or `refactor/...`.
 
-- Keep each PR focused on one topic.
+- Follow the "fix one thing" rule. Keep each PR focused on one topic.
+- Open an issue before starting a large PR so that we can discuss its scope.
 - Include test evidence in the PR description.
 
 ## Style Expectations

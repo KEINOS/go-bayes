@@ -31,16 +31,15 @@ The library packages have 100% statement coverage. `make coverage` uses a 99.9% 
 ## Package Structure
 
 - `bayes`: Public constructor, predictor, persistence, and hasher selection API.
-- `bayes/hasher`: Public transition-hasher interface.
 - `bayes/nodelogger`: Public transition-statistics interface.
-- `bayes/internal/hashers/xxHash3base`: Default xxHash3 context hasher.
-- `bayes/internal/hashers/blake3base`: Optional BLAKE3 context hasher.
+- `bayes/internal/hashers/xxHash3base`: Default xxHash3 value and context hasher.
+- `bayes/internal/hashers/blake3base`: Optional BLAKE3 value and context hasher.
 - `bayes/internal/nodeloggers/logmem`: In-memory transition statistics.
 - `bayes/internal/theorem`: Current Bayes-based scoring helper.
 
 ```mermaid
 flowchart TD
-    A[bayes Predictor] --> B[context Hasher]
+    A[bayes Predictor] --> B[value and context Hasher]
     A --> C[NodeLogger]
     C --> D[theorem scoring helper]
     B --> E[xxHash3 default]

@@ -33,26 +33,27 @@ flowchart LR
 
 This conversion removes the original context length from the storage boundary. A one-token input and a one-thousand-token input can both be represented by one `uint64` input ID.
 
-## Token IDs
+## Value IDs
 
-The current implementation accepts common Go values such as strings, booleans, integers, and floating-point numbers.
+The current implementation accepts booleans, strings, selected integer types, and floating-point numbers. It converts each value to canonical bytes in this order:
 
-- A string receives an item ID from the first 64 bits of its BLAKE3 hash.
-- A boolean becomes `0` or `1`.
-- An integer becomes a `uint64` while preserving its bit pattern.
-- A floating-point number is converted to `uint64`. Its fractional part is lost.
+```text
+item domain byte (0x01) | Go type tag | value payload
+```
 
-These rules create item IDs. They are separate from the configurable context hasher.
+Every supported Go type has a different tag. The payload for an `int` is widened to `int64`, and the payload for a `uint` is widened to `uint64`. Integer payloads use big-endian byte order. Floating-point payloads use their IEEE bit representation, so fractions and NaN bit patterns are preserved.
+
+The predictor passes these bytes to its selected hasher. This means `true`, `int(1)`, `uint64(1)`, and `float64(1)` have different IDs. The tags remove representation ambiguity, but they do not prevent hash collisions.
 
 ## Context Folding
 
-The predictor passes the ordered item IDs to a context hasher. The hasher returns one `uint64` context ID.
+The predictor encodes the ordered item IDs as canonical context bytes:
 
 ```text
-[ID(A), ID(B), ID(C)] -> FOLD -> INPUT ID
+context domain byte (0x02) | item count as uvarint | big-endian item IDs
 ```
 
-xxHash3 is the default context hasher. BLAKE3 is also available. A custom hasher can implement the public `Hasher` interface.
+It passes these bytes to the same hasher that creates value IDs. xxHash3 is the default. BLAKE3 and custom implementations of the public `Hasher` interface are also supported.
 
 The order is part of the input. `FOLD(A, B, C)` and `FOLD(C, A, B)` are different contexts in normal use.
 
@@ -68,10 +69,9 @@ For this sequence:
 A -> B -> C -> D
 ```
 
-the predictor records the direct previous-token transition and the folded suffix contexts. The records for class `D` are:
+the predictor records the folded suffix contexts. The records for class `D` are:
 
 ```text
-ID(C)          -> ID(D)
 FOLD(C)        -> ID(D)
 FOLD(B, C)     -> ID(D)
 FOLD(A, B, C)  -> ID(D)
@@ -115,7 +115,7 @@ CLASS ID -> original Go value
 
 `GetClass` reads this map. It returns `nil` for an unknown ID.
 
-JSON persistence stores the class map, but JSON restores numeric values as `float64`. JSON also does not store the selected context hasher. A restored predictor must use the same context hasher that was used for training.
+JSON persistence stores schema version 1, the hasher name, the class map, and transition state. JSON restores numeric class values as `float64`. Built-in hashers are restored by name. A custom snapshot can be restored only into a predictor that already has a custom hasher with the same name. Missing and unknown schema versions are rejected.
 
 ## Design Boundary
 
@@ -127,6 +127,6 @@ possible next value       -> fixed-width CLASS ID
 learned fact               -> INPUT ID, CLASS ID
 ```
 
-Hash algorithms, probability scoring, storage, pruning, and backoff can change without removing this idea. An implementation that no longer folds an ordered context into one input ID uses a different model.
+Hash algorithms, canonical encoding versions, probability scoring, storage, pruning, and backoff can change without removing this idea. An implementation that no longer folds an ordered context into one input ID uses a different model.
 
 The project is still before `v1.0.0`. API clarity, ease of use, and measured performance are more important than backward compatibility during this stage.

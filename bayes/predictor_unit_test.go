@@ -2,34 +2,38 @@ package bayes
 
 import (
 	"encoding/json"
-	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-var errHashFailed = errors.New("hash failed")
-
 // ----------------------------------------------------------------------------
 //  Helper types and functions for testing
 // ----------------------------------------------------------------------------
 
 type stubHasher struct {
-	got []uint64
-	out uint64
-	err error
+	got  [][]byte
+	name string
+	out  uint64
 }
 
-func (s *stubHasher) HashTrans(transitions ...uint64) (uint64, error) {
-	s.got = append([]uint64{}, transitions...)
+func (s *stubHasher) Hash(data []byte) uint64 {
+	s.got = append(s.got, append([]byte(nil), data...))
 
-	if s.err != nil {
-		return 0, s.err
-	}
-
-	return s.out, nil
+	return s.out
 }
+
+func (s *stubHasher) Name() string { return s.name }
+
+type namedHasher struct {
+	name string
+	base Hasher
+}
+
+func (h *namedHasher) Hash(data []byte) uint64 { return h.base.Hash(data) }
+
+func (h *namedHasher) Name() string { return h.name }
 
 type stubNodeLogger struct{}
 
@@ -79,24 +83,22 @@ func TestNewPredictor_unknownStorage(t *testing.T) {
 	require.ErrorContains(t, err, "failed to create predictor")
 }
 
-// ----------------------------------------------------------------------------
-//  Predictor
-// ----------------------------------------------------------------------------
-
-func TestPredictor_SetHasher_nil(t *testing.T) {
+func TestNewPredictor_rejectsEmptyHasherName(t *testing.T) {
 	t.Parallel()
 
 	instance, err := NewPredictor(PredictorConfig{
 		Storage: MemoryStorage,
 		ScopeID: 0,
-		Hasher:  nil,
+		Hasher:  &stubHasher{got: nil, name: "", out: 0},
 	})
-	require.NoError(t, err)
 
-	err = instance.SetHasher(nil)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "hasher must not be nil")
+	require.ErrorIs(t, err, errPredictorHasherNameEmpty)
+	require.Nil(t, instance)
 }
+
+// ----------------------------------------------------------------------------
+//  Predictor
+// ----------------------------------------------------------------------------
 
 func TestPredictor_HashTrans_errorCases(t *testing.T) {
 	t.Parallel()
@@ -110,14 +112,7 @@ func TestPredictor_HashTrans_errorCases(t *testing.T) {
 
 	_, err = instance.HashTrans(big.NewInt(1))
 	require.Error(t, err)
-	require.ErrorContains(t, err, "failed to convert transitions to uint64")
-
-	stub := &stubHasher{got: nil, out: 0, err: errHashFailed}
-	require.NoError(t, instance.SetHasher(stub))
-
-	_, err = instance.HashTrans(uint64(1), uint64(2))
-	require.Error(t, err)
-	require.ErrorContains(t, err, "failed to hash transitions")
+	require.ErrorContains(t, err, "failed to encode transition")
 }
 
 func TestPredictor_Predict_notInitialized(t *testing.T) {
@@ -129,6 +124,7 @@ func TestPredictor_Predict_notInitialized(t *testing.T) {
 		storage:   UnknownStorage,
 		scopeID:   0,
 		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	actual, err := instance.Predict([]any{uint64(1)})
@@ -173,6 +169,7 @@ func TestPredictor_Train_errorCases(t *testing.T) {
 		scopeID:   0,
 		hasher:    NewDefaultHasher(),
 		classes:   map[uint64]classEntry{},
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	err := instance.Train([]any{"a", "b"})
@@ -185,6 +182,7 @@ func TestPredictor_Train_errorCases(t *testing.T) {
 		scopeID:   0,
 		hasher:    nil,
 		classes:   map[uint64]classEntry{},
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	err = instance.Train([]any{"a", "b"})
@@ -220,6 +218,7 @@ func TestPredictor_ID_fallsBackToScopeID(t *testing.T) {
 		storage:   UnknownStorage,
 		scopeID:   77,
 		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	require.Equal(t, uint64(77), instance.ID())
@@ -255,6 +254,7 @@ func TestPredictor_addClass_defaultBranch(t *testing.T) {
 		storage:   UnknownStorage,
 		scopeID:   0,
 		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	type custom struct{ Value string }
@@ -274,6 +274,7 @@ func TestPredictor_addClass_allSupportedTypes(t *testing.T) {
 		storage:   UnknownStorage,
 		scopeID:   0,
 		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	inputs := []any{
@@ -311,6 +312,7 @@ func TestPredictor_SetStorage(t *testing.T) {
 		storage:   UnknownStorage,
 		scopeID:   0,
 		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	instance.SetStorage(MemoryStorage)
@@ -320,26 +322,32 @@ func TestPredictor_SetStorage(t *testing.T) {
 func TestPredictor_HashTrans_usesInjectedHasher(t *testing.T) {
 	t.Parallel()
 
+	stub := &stubHasher{got: nil, name: "stub", out: 0x99}
 	instance, err := NewPredictor(PredictorConfig{
 		Storage: MemoryStorage,
 		ScopeID: 0,
-		Hasher:  nil,
+		Hasher:  stub,
 	})
 	require.NoError(t, err)
-
-	stub := &stubHasher{got: nil, out: 0x99, err: nil}
-	require.NoError(t, instance.SetHasher(stub))
 
 	actual, err := instance.HashTrans("a", "b")
 	require.NoError(t, err)
 	require.Equal(t, uint64(0x99), actual)
-	require.Len(t, stub.got, 2)
+	require.Len(t, stub.got, 3)
+	require.Equal(t, []byte{itemDomain, tagString, 'a'}, stub.got[0])
+	require.Equal(t, []byte{itemDomain, tagString, 'b'}, stub.got[1])
+
+	wantContext := make([]byte, 0, 18)
+	wantContext = append(wantContext, contextDomain, 0x02)
+	wantContext = append(wantContext, eightBytes(0x99)...)
+	wantContext = append(wantContext, eightBytes(0x99)...)
+	require.Equal(t, wantContext, stub.got[2])
 }
 
 func TestPredictor_NewPredictor_usesConfigHasher(t *testing.T) {
 	t.Parallel()
 
-	stub := &stubHasher{got: nil, out: 0x55, err: nil}
+	stub := &stubHasher{got: nil, name: "stub", out: 0x55}
 
 	instance, err := NewPredictor(PredictorConfig{
 		Storage: MemoryStorage,
@@ -428,23 +436,123 @@ func TestPredictor_Train_nilClasses(t *testing.T) {
 func TestPredictor_JSONRoundTrip(t *testing.T) {
 	t.Parallel()
 
+	for name, hasher := range map[string]Hasher{
+		"xxhash3": NewXXHash3Hasher(),
+		"blake3":  NewBlake3Hasher(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			original, err := NewPredictor(PredictorConfig{
+				Storage: MemoryStorage,
+				ScopeID: 123,
+				Hasher:  hasher,
+			})
+			require.NoError(t, err)
+			require.NoError(t, original.Train([]any{"a", "b", "a", "b"}))
+
+			raw, err := json.Marshal(original)
+			require.NoError(t, err)
+			require.Contains(t, string(raw), `"schemaVersion":1`)
+			require.Contains(t, string(raw), `"hasher":"`+name+`"`)
+
+			var restored Predictor
+			require.NoError(t, json.Unmarshal(raw, &restored))
+			require.Equal(t, name, restored.hasher.Name())
+
+			actual, err := restored.Predict([]any{"a"})
+			require.NoError(t, err)
+			require.Equal(t, "b", restored.GetClass(actual))
+		})
+	}
+}
+
+func TestPredictor_JSONCustomHasher(t *testing.T) {
+	t.Parallel()
+
+	const customHasherName = "example-v1"
+
+	custom := &namedHasher{name: customHasherName, base: NewXXHash3Hasher()}
 	original, err := NewPredictor(PredictorConfig{
 		Storage: MemoryStorage,
-		ScopeID: 123,
-		Hasher:  nil,
+		ScopeID: 456,
+		Hasher:  custom,
 	})
 	require.NoError(t, err)
-	require.NoError(t, original.Train([]any{"a", "b", "a", "b"}))
+	require.NoError(t, original.Train([]string{"a", "b", "a", "b"}))
 
 	raw, err := json.Marshal(original)
 	require.NoError(t, err)
 
-	var restored Predictor
-	require.NoError(t, json.Unmarshal(raw, &restored))
+	restored, err := NewPredictor(PredictorConfig{
+		Storage: MemoryStorage,
+		ScopeID: 0,
+		Hasher:  &namedHasher{name: customHasherName, base: NewXXHash3Hasher()},
+	})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, restored))
+	require.Equal(t, customHasherName, restored.hasher.Name())
 
-	actual, err := restored.Predict([]any{"a"})
+	actual, err := restored.Predict([]string{"a"})
 	require.NoError(t, err)
 	require.Equal(t, "b", restored.GetClass(actual))
+
+	var missing Predictor
+
+	err = json.Unmarshal(raw, &missing)
+	require.ErrorIs(t, err, errPredictorHasherMismatch)
+
+	mismatch, err := NewPredictor(PredictorConfig{
+		Storage: MemoryStorage,
+		ScopeID: 0,
+		Hasher:  &namedHasher{name: "different-v1", base: NewXXHash3Hasher()},
+	})
+	require.NoError(t, err)
+	err = json.Unmarshal(raw, mismatch)
+	require.ErrorIs(t, err, errPredictorHasherMismatch)
+}
+
+func TestPredictor_UnmarshalJSON_rejectsIncompatibleSchemas(t *testing.T) {
+	t.Parallel()
+
+	for name, raw := range map[string]string{
+		"missing schema": `{"hasher":"xxhash3","storage":1}`,
+		"unknown schema": `{"schemaVersion":2,"hasher":"xxhash3","storage":1}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var predictor Predictor
+
+			err := json.Unmarshal([]byte(raw), &predictor)
+			require.ErrorIs(t, err, errPredictorSchemaUnsupported)
+		})
+	}
+}
+
+func TestPredictor_UnmarshalJSON_rejectsMissingHasher(t *testing.T) {
+	t.Parallel()
+
+	var predictor Predictor
+
+	err := json.Unmarshal([]byte(`{"schemaVersion":1,"storage":1}`), &predictor)
+	require.ErrorIs(t, err, errPredictorHasherMismatch)
+}
+
+func TestPredictor_Reset_preservesHasher(t *testing.T) {
+	t.Parallel()
+
+	hasher := &namedHasher{name: "example-v1", base: NewXXHash3Hasher()}
+	predictor, err := NewPredictor(PredictorConfig{
+		Storage: MemoryStorage,
+		ScopeID: 0,
+		Hasher:  hasher,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, predictor.Train([]string{"a", "b"}))
+	require.NoError(t, predictor.Reset())
+	require.Same(t, hasher, predictor.hasher)
 }
 
 func TestPredictor_MarshalJSON_withoutPredictor(t *testing.T) {
@@ -456,6 +564,7 @@ func TestPredictor_MarshalJSON_withoutPredictor(t *testing.T) {
 		storage:   MemoryStorage,
 		scopeID:   1,
 		hasher:    NewDefaultHasher(),
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	_, err := json.Marshal(instance)
@@ -465,6 +574,28 @@ func TestPredictor_MarshalJSON_withoutPredictor(t *testing.T) {
 func TestPredictor_MarshalJSON_errorCases(t *testing.T) {
 	t.Parallel()
 
+	withoutHasher := &Predictor{
+		predictor: nil,
+		classes:   nil,
+		storage:   MemoryStorage,
+		scopeID:   0,
+		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
+	}
+	_, err := json.Marshal(withoutHasher)
+	require.ErrorIs(t, err, errPredictorHasherUninit)
+
+	emptyHasherName := &Predictor{
+		predictor: nil,
+		classes:   nil,
+		storage:   MemoryStorage,
+		scopeID:   0,
+		hasher:    &stubHasher{got: nil, name: "", out: 0},
+		scratch:   codecScratch{bytes: nil, ids: nil},
+	}
+	_, err = json.Marshal(emptyHasherName)
+	require.ErrorIs(t, err, errPredictorHasherNameEmpty)
+
 	instance := &Predictor{
 		predictor: nil,
 		classes: map[uint64]classEntry{
@@ -473,9 +604,10 @@ func TestPredictor_MarshalJSON_errorCases(t *testing.T) {
 		storage: MemoryStorage,
 		scopeID: 1,
 		hasher:  NewDefaultHasher(),
+		scratch: codecScratch{bytes: nil, ids: nil},
 	}
 
-	_, err := json.Marshal(instance)
+	_, err = json.Marshal(instance)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to marshal predictor JSON")
 
@@ -502,6 +634,7 @@ func TestPredictor_MarshalJSON_unsupportedPredictorImplementation(t *testing.T) 
 		storage:   MemoryStorage,
 		scopeID:   1,
 		hasher:    NewDefaultHasher(),
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	_, err := json.Marshal(instance)
@@ -518,7 +651,7 @@ func TestPredictor_UnmarshalJSON_errorCases(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to unmarshal predictor JSON")
 
-	err = json.Unmarshal([]byte(`{"storage":0,"scopeId":1}`), &instance)
+	err = json.Unmarshal([]byte(`{"schemaVersion":1,"hasher":"xxhash3","storage":0,"scopeId":1}`), &instance)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to initialize predictor from JSON")
 }
@@ -528,7 +661,8 @@ func TestPredictor_UnmarshalJSON_withoutNodeLog(t *testing.T) {
 
 	var instance Predictor
 
-	err := json.Unmarshal([]byte(`{"storage":1,"scopeId":9,"classes":null}`), &instance)
+	raw := []byte(`{"schemaVersion":1,"hasher":"xxhash3","storage":1,"scopeId":9,"classes":null}`)
+	err := json.Unmarshal(raw, &instance)
 	require.NoError(t, err)
 	require.NotNil(t, instance.predictor)
 	require.NotNil(t, instance.classes)

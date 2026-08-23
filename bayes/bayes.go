@@ -56,7 +56,7 @@ func (s Storage) Type() string {
 // ----------------------------------------------------------------------------
 
 // New returns an isolated Predictor using the requested storage and scope. With
-// no options, it uses xxHash3 context folding.
+// no options, it uses xxHash3 for value and context IDs.
 func New(engine Storage, scopeID uint64, options ...Option) (*Predictor, error) {
 	config := PredictorConfig{
 		Storage: engine,

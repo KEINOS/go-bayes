@@ -106,7 +106,7 @@ View the [complete source](_examples/http_status/main.go), or [run it online](ht
 
 > [!NOTE]
 >
-> * `New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for context folding by default.
+> * `New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for value and context IDs by default.
 > * A `Predictor` is not safe for concurrent use; callers must synchronize shared access.
 
 ### More Examples
@@ -127,16 +127,13 @@ The predictor learns transitions from an ordered context to a possible next valu
 
 Its current model is a Folded Context Transition Predictor (FCTP). It converts each value to a fixed-width ID and folds an ordered context of any supported length into one context ID. `GetClass` resolves the predicted class ID to the original value recorded during training.
 
-Training `A -> B -> C -> D` also records the suffix contexts that lead to `D`:
+Training `A -> B -> C -> D` records the suffix contexts that lead to `D`:
 
 ```text
-C             -> D
 FOLD(C)       -> D
 FOLD(B, C)    -> D
 FOLD(A, B, C) -> D
 ```
-
-The first line is a direct item transition. The other lines use folded context IDs.
 
 Context order matters. The predictor matches exact folded IDs. It does not measure similarity between values or retry shorter contexts when the complete context is unknown.
 
@@ -149,13 +146,13 @@ Context order matters. The predictor matches exact folded IDs. It does not measu
 * `uint`, `uint16`, `uint32`, and `uint64`;
 * `float32` and `float64`.
 
-Integer values preserve their bit pattern. Strings receive deterministic fixed-width IDs. Floating-point values are currently converted with `uint64(value)`, so fractional parts are discarded; use scaled integers or canonical strings when fractions are significant.
+Each value is encoded with its Go type before it is hashed. For example, `true`, `int(1)`, `uint64(1)`, and `float64(1)` have different IDs. Integer signs and floating-point fractions are preserved.
 
 IDs are deterministic identifiers, not collision-free or reversible encodings. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
 
 ### Hashers
 
-xxHash3 is the default context-folding algorithm. Select BLAKE3 when compatibility with BLAKE3-derived context IDs is required:
+xxHash3 is the default algorithm for value and context IDs. Select BLAKE3 when you need BLAKE3-based IDs:
 
 ```go
 predictor, err := bayes.New(
@@ -175,7 +172,7 @@ predictor, err := bayes.NewPredictor(bayes.PredictorConfig{
 })
 ```
 
-Changing the hasher changes context IDs. Use the same algorithm for training and prediction. String values use fixed BLAKE3-based item IDs before the selected hasher folds the context.
+The selected hasher creates every value ID and context ID. It is fixed when the predictor is created. A custom hasher must return a stable, non-empty name for JSON persistence.
 
 ### Persistence
 
@@ -197,7 +194,7 @@ if err != nil {
 
 The JSON format stores transition state, scope, storage type, and the class map. JSON does not preserve the exact Go type of numeric class values. For example, an `int` class value is restored as `float64`.
 
-The format does not store the selected hasher. Unmarshaling selects the default xxHash3 hasher. After restoring data trained with BLAKE3 or a custom hasher, call `SetHasher` with the matching implementation before prediction.
+The format uses schema version 1 and stores the selected hasher name. Built-in hashers are restored automatically. To restore a custom-hasher snapshot, create a predictor with a custom hasher that has the same name, then unmarshal into that predictor. Snapshots from `v0.0.4` or earlier do not have a schema version and are rejected.
 
 `Reset` clears learned transitions and classes. `SetStorage` selects the backend used by the next `Reset`. Only `MemoryStorage` is currently implemented.
 

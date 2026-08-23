@@ -41,6 +41,22 @@ func BenchmarkPredictor_Predict(b *testing.B) {
 	}
 }
 
+func BenchmarkPredictor_HashTrans(b *testing.B) {
+	predictor, err := NewPredictor(PredictorConfig{
+		Storage: MemoryStorage,
+		ScopeID: 0,
+		Hasher:  nil,
+	})
+	require.NoError(b, err)
+
+	context := []any{"So", int(-1), uint64(42), float64(1.5), true}
+
+	for b.Loop() {
+		_, err := predictor.HashTrans(context...)
+		require.NoError(b, err)
+	}
+}
+
 func benchmarkScore() []string {
 	return []string{
 		"So", "So", "La", "So", "Do", "Si",

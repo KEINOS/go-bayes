@@ -4,76 +4,51 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/KEINOS/go-bayes/bayes/internal/hashers/blake3base"
 	"github.com/stretchr/testify/require"
 	"github.com/zeebo/xxh3"
 )
 
-func BenchmarkHasher_HashTrans(b *testing.B) {
-	for _, size := range []int{1, 6, 32, 256} {
-		input := make([]uint64, size)
-		for index := range input {
-			input[index] = uint64(index) // #nosec G115 -- benchmark input is non-negative.
-		}
+func BenchmarkHasher_Hash(b *testing.B) {
+	for _, size := range []int{8, 48, 256, 2048} {
+		input := make([]byte, size)
 
 		b.Run(benchmarkName(size), func(b *testing.B) {
-			b.Run("original", func(b *testing.B) {
-				hasher := blake3base.New()
-
-				for b.Loop() {
-					_, err := hasher.HashTrans(input...)
-					if err != nil {
-						b.Fatal(err)
-					}
-				}
-			})
-
-			b.Run("enhanced", func(b *testing.B) {
-				hasher := New()
-
-				for b.Loop() {
-					_, err := hasher.HashTrans(input...)
-					if err != nil {
-						b.Fatal(err)
-					}
-				}
-			})
+			hasher := New()
+			for b.Loop() {
+				hasher.Hash(input)
+			}
 		})
 	}
 }
 
-func FuzzHasher_HashTrans(f *testing.F) {
+func FuzzHasher_Hash(f *testing.F) {
 	f.Add([]byte{})
 	f.Add([]byte{0})
 	f.Add([]byte{0, 1, 2, 3, 4, 5, 6, 7, 8})
 	f.Add([]byte{0xff, 0xff, 0xff, 0xff})
 
 	f.Fuzz(func(t *testing.T, input []byte) {
-		transitions := make([]uint64, len(input))
-		encoded := make([]byte, len(input)*8)
+		actual := New().Hash(input)
+		require.Equal(t, xxh3.Hash(input), actual)
 
-		for index, value := range input {
-			transitions[index] = uint64(value)
-			binary.LittleEndian.PutUint64(encoded[index*8:], uint64(value))
+		if len(input) >= 8 {
+			copyInput := append([]byte(nil), input...)
+			binary.BigEndian.PutUint64(copyInput, binary.BigEndian.Uint64(copyInput)+1)
+			require.NotEqual(t, actual, New().Hash(copyInput))
 		}
-
-		actual, err := New().HashTrans(transitions...)
-
-		require.NoError(t, err)
-		require.Equal(t, xxh3.Hash(encoded), actual)
 	})
 }
 
 func benchmarkName(size int) string {
 	switch size {
-	case 1:
-		return "transitions_1"
-	case 6:
-		return "transitions_6"
-	case 32:
-		return "transitions_32"
+	case 8:
+		return "bytes_8"
+	case 48:
+		return "bytes_48"
 	case 256:
-		return "transitions_256"
+		return "bytes_256"
+	case 2048:
+		return "bytes_2048"
 	default:
 		panic("unsupported benchmark size")
 	}

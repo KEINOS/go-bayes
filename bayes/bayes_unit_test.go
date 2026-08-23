@@ -67,69 +67,6 @@ func Test_addClass(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
-//  convAnyToUint64
-// ----------------------------------------------------------------------------
-
-func Test_convAnyToUint64_error_cases(t *testing.T) {
-	t.Parallel()
-
-	for _, tt := range []any{
-		nil,
-		big.NewInt(9223372036854775807),
-		*big.NewInt(9223372036854775807),
-	} {
-		v, err := convAnyToUint64(tt)
-
-		require.Error(t, err, "it should be an error if the input is nil")
-		require.Zero(t, v, "it should be zero on error")
-
-		assert.Contains(t, err.Error(), "unsupported type for conversion")
-	}
-}
-
-func Test_convAnyToUint64_golden(t *testing.T) {
-	t.Parallel()
-
-	for _, tt := range []struct {
-		input  any
-		expect uint64
-	}{
-		{-1234, uint64(0xfffffffffffffb2e)},
-		{12345, uint64(0x3039)},
-		{uint(0xffffffffffffffff), uint64(0xffffffffffffffff)},
-		{uint64(1), uint64(1)},
-		{uint32(1), uint64(1)},
-		{uint16(1), uint64(1)},
-		{uint(1), uint64(1)},
-		{int64(1), uint64(1)},
-		{int32(1), uint64(1)},
-		{int16(1), uint64(1)},
-		{int(2147483647), uint64(0x7fffffff)},
-		{int(-2147483648), uint64(0xffffffff80000000)},
-		{int(0xff), uint64(0xff)},
-		{float64(1.0), uint64(1)},
-		{float32(1.0), uint64(1)},
-		{"foobar", uint64(0xaa51dcd43d5c6c52)},
-		{true, uint64(1)},
-		{false, uint64(0)},
-	} {
-		v, err := convAnyToUint64(tt.input)
-
-		require.NoError(t, err)
-		assert.Equal(t, tt.expect, v, "input: %v", tt.input)
-	}
-}
-
-func Test_convAnyToUint64_int_large_value(t *testing.T) {
-	t.Parallel()
-
-	v, err := convAnyToUint64(int(2147483648)) // maxInt32 + 1
-
-	require.NoError(t, err)
-	require.Equal(t, uint64(2147483648), v)
-}
-
-// ----------------------------------------------------------------------------
 //  New
 // ----------------------------------------------------------------------------
 
@@ -201,7 +138,14 @@ func TestNew_hasherOptions(t *testing.T) {
 			actual, err := predictor.HashTrans(10, 11, 12)
 			require.NoError(t, err)
 
-			expected, err := test.want.HashTrans(10, 11, 12)
+			expectedPredictor, err := NewPredictor(PredictorConfig{
+				Storage: MemoryStorage,
+				ScopeID: 100,
+				Hasher:  test.want,
+			})
+			require.NoError(t, err)
+
+			expected, err := expectedPredictor.HashTrans(10, 11, 12)
 			require.NoError(t, err)
 			require.Equal(t, expected, actual)
 		})
@@ -264,6 +208,7 @@ func TestPredict_not_initialized(t *testing.T) {
 		storage:   UnknownStorage,
 		scopeID:   0,
 		hasher:    nil,
+		scratch:   codecScratch{bytes: nil, ids: nil},
 	}
 
 	classPredicted, err := instance.Predict([]any{byte(0x10)})
@@ -325,5 +270,5 @@ func TestTrain_slice_of_unsupported_type(t *testing.T) {
 	assert.Contains(t, err.Error(),
 		"failed during training iteration")
 	assert.Contains(t, err.Error(),
-		"unsupported type for conversion")
+		"unsupported value type")
 }

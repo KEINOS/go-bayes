@@ -40,7 +40,7 @@ func Example() {
 	fmt.Printf("Next is: %v (Class ID: %v)\n", nextNoteString, nextNoteID)
 	//
 	// Output:
-	// Next is: So (Class ID: 10062876669317908741)
+	// Next is: So (Class ID: 2326549176558064863)
 }
 
 //nolint:funlen // allow long function due to example
@@ -159,7 +159,7 @@ func ExampleWithHasher() {
 	}
 
 	fmt.Println(flowID)
-	// Output: 7573192273568316974
+	// Output: 6611782858352040389
 }
 
 // ----------------------------------------------------------------------------

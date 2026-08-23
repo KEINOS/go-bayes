@@ -22,7 +22,7 @@ test_example:
 
 .PHONY: lint
 lint:
-	@golangci-lint run --fix ./... ./_examples/iris
+	@golangci-lint run --fix ./... $(EXAMPLE_DIRS)
 	@markdownlint-cli2 "**/*.md" --fix
 
 .PHONY: fuzz

@@ -10,44 +10,50 @@ Thanks for contributing to `go-bayes`.
 
 ## Local Commands
 
-- Run unit tests:
+Run the complete local validation gate:
 
 ```sh
-go test ./...
+make check
 ```
 
-- Run tests with race and coverage:
+Run individual checks:
 
 ```sh
-go test -cover -race ./...
+make test
+make test_example
+make coverage
+make bench
+make fuzz
 ```
 
-- Run lints:
+The library packages have 100% statement coverage. `make coverage` uses a 99.9% minimum. Directories beginning with `_` are excluded from Go's default `./...` expansion, so `make test_example` finds and tests each runnable example explicitly.
 
-```sh
-golangci-lint run --fix
-markdownlint-cli2 "**/*.md" --fix
+## Package Structure
+
+- `bayes`: Public constructor, predictor, persistence, and hasher selection API.
+- `bayes/hasher`: Public transition-hasher interface.
+- `bayes/nodelogger`: Public transition-statistics interface.
+- `bayes/internal/hashers/xxHash3base`: Default xxHash3 context hasher.
+- `bayes/internal/hashers/blake3base`: Optional BLAKE3 context hasher.
+- `bayes/internal/nodeloggers/logmem`: In-memory transition statistics.
+- `bayes/internal/theorem`: Current Bayes-based scoring helper.
+
+```mermaid
+flowchart TD
+    A[bayes Predictor] --> B[context Hasher]
+    A --> C[NodeLogger]
+    C --> D[theorem scoring helper]
+    B --> E[xxHash3 default]
+    B --> F[BLAKE3 optional]
+    C --> G[in-memory storage]
 ```
 
-- Run fuzz test quickly:
-
-```sh
-go test -fuzz=FuzzBayes -fuzztime=5s ./bayes/internal/theorem
-```
-
-- Run benchmarks:
-
-```sh
-go test -bench=. ./...
-```
+Read the [technical specification](../SPEC.md) before changing context folding, training expansion, scoring, or class recovery.
 
 ## Branch And PR Conventions
 
-- Use short branch names prefixed by intent:
-  - `fix/...`
-  - `feat/...`
-  - `docs/...`
-  - `refactor/...`
+Use short branch names prefixed by intent: `fix/...`, `feat/...`, `docs/...`, or `refactor/...`.
+
 - Keep each PR focused on one topic.
 - Include test evidence in the PR description.
 

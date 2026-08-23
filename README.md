@@ -3,16 +3,13 @@
 
 # go-bayes
 
-`github.com/KEINOS/go-bayes/bayes` is a Bayesian inference package for Go. Its current predictor is a Folded Context Transition Predictor (FCTP).
+`github.com/KEINOS/go-bayes/bayes` is a Bayesian inference package for Go.
 
-The package learns transitions from an ordered context to a possible next value. It converts supported values to fixed-width item IDs, folds a variable-length context into one fixed-width context ID, scores the learned candidate transitions, and returns the most likely class ID. Use `GetClass` to resolve that ID to the original value recorded during training.
-
-The predictor uses learned probabilities to estimate the most likely next value for an observed context. Its scoring calculation is based on Bayes' theorem. It is not a Naive Bayes classifier. It learns transitions from an ordered context to the value that follows it.
-
-See the [technical specification](SPEC.md) for the two-ID learning model, context folding, training expansion, and current design limits.
+It learns ordered sequences and predicts the value that is likely to come next. The current model is a Folded Context Transition Predictor (FCTP).
 
 > [!IMPORTANT]
-> The latest published release is `v0.0.3`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility. The API can change before the first stable release.
+> **The API can change before the first stable release.**
+> The latest published release is `v0.0.3`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility.
 
 ## Quick Start
 
@@ -22,13 +19,19 @@ Install the module:
 go get github.com/KEINOS/go-bayes@latest
 ```
 
-### String Sequence
-
-Train a sequence and predict its next value. Imports and the outer `main`
-function are omitted here:
+Use the package:
 
 ```go
-predictor, err := bayes.New(bayes.MemoryStorage, 100)
+import "github.com/KEINOS/go-bayes/bayes"
+```
+
+### String Sequence
+
+Train a sequence and predict its next value. Imports and the outer `main` function are omitted here:
+
+```go
+const datasetID uint64 = 100
+predictor, err := bayes.New(bayes.MemoryStorage, datasetID)
 if err != nil {
  log.Fatal(err)
 }
@@ -56,12 +59,11 @@ See the [complete melody program](_examples/melody/README.md).
 
 ### Integer Sequence
 
-The same API accepts discrete integer values. This example learns HTTP status
-history and predicts recovery after rate limiting and a temporary outage.
-Imports and the outer `main` function are omitted here:
+The same API accepts discrete integer values. This example learns HTTP status history and predicts recovery after rate limiting and a temporary outage. Imports and the outer `main` function are omitted here:
 
 ```go
-predictor, err := bayes.New(bayes.MemoryStorage, 101)
+const datasetID uint64 = 101
+predictor, err := bayes.New(bayes.MemoryStorage, datasetID)
 if err != nil {
  log.Fatal(err)
 }
@@ -102,24 +104,18 @@ fmt.Println(predictor.GetClass(classID))
 
 See the [complete HTTP status program](_examples/http_status/README.md).
 
-`New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for context folding by default. A `Predictor` is not safe for concurrent use; callers must synchronize shared access.
+> [!NOTE]
+>
+> * `New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for context folding by default.
+> * A `Predictor` is not safe for concurrent use; callers must synchronize shared access.
 
-## Value and ID Semantics
+## Features and Behavior
 
-`Train`, `Predict`, and `HashTrans` accept slices or values composed of these built-in types:
+The predictor learns transitions from an ordered context to a possible next value. It uses learned probabilities to select the most likely class for the supplied context. This is Bayesian inference, but it is not a Naive Bayes classifier.
 
-- `bool` and `string`;
-- `int`, `int16`, `int32`, and `int64`;
-- `uint`, `uint16`, `uint32`, and `uint64`;
-- `float32` and `float64`.
+Its current model is a Folded Context Transition Predictor (FCTP). It converts each value to a fixed-width ID and folds an ordered context of any supported length into one context ID. `GetClass` resolves the predicted class ID to the original value recorded during training.
 
-Integer values preserve their bit pattern. Strings receive deterministic fixed-width IDs. Floating-point values are currently converted with `uint64(value)`, so fractional parts are discarded; use scaled integers or canonical strings when fractions are significant.
-
-IDs are deterministic identifiers, not collision-free or reversible encodings. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
-
-## How It Learns
-
-Training an ordered sequence `A -> B -> C -> D` records direct transitions and folded suffix contexts for each observed next value. The knowledge relevant to `D` includes:
+Training `A -> B -> C -> D` also records the suffix contexts that lead to `D`:
 
 ```text
 C             -> D
@@ -128,11 +124,22 @@ FOLD(B, C)    -> D
 FOLD(A, B, C) -> D
 ```
 
-Calling `Predict([]T{A, B, C})` computes `FOLD(A, B, C)`, compares the learned candidate class IDs, and returns the highest-scoring ID. Training also records contexts that predict `B` and `C`; every item after the first item in a training sequence is a possible class.
+Context order matters. The predictor matches exact folded IDs. It does not measure similarity between values or retry shorter contexts when the complete context is unknown.
 
-The current predictor matches deterministic folded IDs. It does not calculate similarity between values and does not automatically retry shorter contexts when a full context is unknown. A caller can implement backoff by retrying shorter suffixes.
+### Supported Values
 
-## Hashers
+`Train`, `Predict`, and `HashTrans` accept slices or values composed of these built-in types:
+
+* `bool` and `string`;
+* `int`, `int16`, `int32`, and `int64`;
+* `uint`, `uint16`, `uint32`, and `uint64`;
+* `float32` and `float64`.
+
+Integer values preserve their bit pattern. Strings receive deterministic fixed-width IDs. Floating-point values are currently converted with `uint64(value)`, so fractional parts are discarded; use scaled integers or canonical strings when fractions are significant.
+
+IDs are deterministic identifiers, not collision-free or reversible encodings. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
+
+### Hashers
 
 xxHash3 is the default context-folding algorithm. Select BLAKE3 when compatibility with BLAKE3-derived context IDs is required:
 
@@ -154,11 +161,9 @@ predictor, err := bayes.NewPredictor(bayes.PredictorConfig{
 })
 ```
 
-Changing the hasher changes context IDs. Use the same algorithm for training and prediction.
+Changing the hasher changes context IDs. Use the same algorithm for training and prediction. String values use fixed BLAKE3-based item IDs before the selected hasher folds the context.
 
-The selected hasher folds a context into one context ID. String values use their own fixed BLAKE3-based item IDs before the context is folded.
-
-## Persistence
+### Persistence
 
 `Predictor` implements `encoding/json` marshaling and unmarshaling for `MemoryStorage`:
 
@@ -180,76 +185,38 @@ The JSON format stores transition state, scope, storage type, and the class map.
 
 The format does not store the selected hasher. Unmarshaling selects the default xxHash3 hasher. After restoring data trained with BLAKE3 or a custom hasher, call `SetHasher` with the matching implementation before prediction.
 
-`Reset` clears learned transitions and classes. `SetStorage` selects the backend used by the next `Reset`; only `MemoryStorage` is currently implemented.
+`Reset` clears learned transitions and classes. `SetStorage` selects the backend used by the next `Reset`. Only `MemoryStorage` is currently implemented.
 
-## Runnable Example
+## Technical Details
 
-Runnable programs include the [melody](_examples/melody/README.md) and [HTTP status](_examples/http_status/README.md) Quick Start examples. The [Iris example](_examples/iris/README.md) trains all 150 records from the original UCI CSV data. The [Wine example](_examples/wine/README.md) uses 13 ordered numeric measurements. The [Mushroom example](_examples/mushroom/README.md) uses 22 categorical values, including a missing-value token.
+Read the [technical specification](SPEC.md) for the two-ID learning model, token IDs, context folding, suffix expansion, Bayesian scoring, class recovery, and current design limits.
 
-```sh
-go run ./_examples/http_status
-go run ./_examples/iris
-go run ./_examples/melody
-go run ./_examples/mushroom
-go run ./_examples/wine
-```
+## Examples
 
-See the [examples overview](_examples/README.md) for validation commands and additional examples.
+The [examples overview](_examples/README.md) links to all runnable programs:
 
-## Package Structure
-
-- `bayes`: Public constructor, predictor, persistence, and hasher selection API.
-- `bayes/hasher`: Public transition-hasher interface.
-- `bayes/nodelogger`: Public transition-statistics interface.
-- `bayes/internal/hashers/xxHash3base`: Default xxHash3 context hasher.
-- `bayes/internal/hashers/blake3base`: Optional BLAKE3 context hasher.
-- `bayes/internal/nodeloggers/logmem`: In-memory transition statistics.
-- `bayes/internal/theorem`: Current Bayes-based scoring helper.
-
-```mermaid
-flowchart TD
-    A[bayes Predictor] --> B[context Hasher]
-    A --> C[NodeLogger]
-    C --> D[theorem scoring helper]
-    B --> E[xxHash3 default]
-    B --> F[BLAKE3 optional]
-    C --> G[in-memory storage]
-```
-
-## Development
-
-Run the complete local validation gate:
-
-```sh
-make check
-```
-
-Run individual checks:
-
-```sh
-make test
-make test_example
-make coverage
-make bench
-make fuzz
-```
-
-The library packages have 100% statement coverage. `make coverage` uses a 99.9% minimum. Directories beginning with `_` are excluded from Go's default `./...` expansion, so `make test_example` finds and tests each runnable example explicitly.
-
-## Roadmap
-
-- Add a pruning policy for low-value transitions.
-- Add persistent storage backends such as SQLite.
-- Evaluate explicit suffix backoff strategies.
-- Explore optional order-invariant and neural-style modes without changing the default FCTP contract.
-- Add more runnable, real-data examples.
+* [Melody](_examples/melody/README.md): String sequence prediction.
+* [HTTP status](_examples/http_status/README.md): Integer sequence prediction.
+* [Iris](_examples/iris/README.md): 150 records from the original UCI Iris data.
+* [Wine](_examples/wine/README.md): 13 ordered numeric measurements.
+* [Mushroom](_examples/mushroom/README.md): 22 categorical values.
 
 ## Contributing
 
+[![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/KEINOS/go-bayes)](https://github.com/KEINOS/go-bayes/blob/main/go.mod)
+[![Go Reference](https://pkg.go.dev/badge/github.com/KEINOS/go-bayes/bayes.svg)](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes)
 [![unit-test](https://github.com/KEINOS/go-bayes/actions/workflows/unit-test.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/unit-test.yml)
 [![golangci-lint](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml "Static analysis")
 [![codecov](https://codecov.io/gh/KEINOS/go-bayes/branch/main/graph/badge.svg?token=k0VCclM4G7)](https://codecov.io/gh/KEINOS/go-bayes "Code coverage")
 [![CodeQL](https://github.com/KEINOS/go-bayes/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/codeql-analysis.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/KEINOS/go-bayes)](https://goreportcard.com/report/github.com/KEINOS/go-bayes "View report card")
 
-Changes should include appropriate tests or runnable examples and pass `make check`. Open pull requests against `main`; a draft pull request is welcome while work is in progress.
+Contributor resources:
+
+* [Contributing guide](.github/CONTRIBUTING.md): Implementation details and validation commands.
+* [Security policy](.github/SECURITY.md): How to report a vulnerability.
+* [Issues and roadmap](https://github.com/KEINOS/go-bayes/issues): Bugs, feature requests, and planned work.
+
+## License
+
+`go-bayes` is available under the [MIT License](LICENSE).

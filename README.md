@@ -1,5 +1,4 @@
-<!-- markdownlint-disable MD041 -->
-[![Go Version](https://img.shields.io/badge/Go-1.26+-blue?logo=go)](https://github.com/KEINOS/go-bayes/blob/main/go.mod)
+[![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/KEINOS/go-bayes)](https://github.com/KEINOS/go-bayes/blob/main/go.mod)
 [![Go Reference](https://pkg.go.dev/badge/github.com/KEINOS/go-bayes/bayes.svg)](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes)
 
 # go-bayes

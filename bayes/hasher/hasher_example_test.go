@@ -11,7 +11,7 @@ import (
 func Example() {
 	var h = bayes.NewDefaultHasher()
 
-	// HashTrans returns a deterministic uint64 flow ID from the given transition IDs.
+	// HashTrans returns a deterministic context ID from ordered item IDs.
 	flowID, err := h.HashTrans(100, 200, 300)
 	if err != nil {
 		panic(err)

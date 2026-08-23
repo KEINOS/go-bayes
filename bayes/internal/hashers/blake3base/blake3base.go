@@ -25,7 +25,8 @@ func New() *Hasher {
 	return &Hasher{}
 }
 
-// HashTrans returns a unique hash from the input transitions.
+// HashTrans folds the ordered transition IDs into a deterministic uint64. Hash
+// collisions are possible because the result has fixed width.
 func (h *Hasher) HashTrans(transitions ...uint64) (uint64, error) {
 	hashed := getBlake3(transitions...)
 

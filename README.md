@@ -1,215 +1,208 @@
 <!-- markdownlint-disable MD041 -->
-[![Go Version](https://img.shields.io/badge/Go-1.22+-blue?logo=go)](https://github.com/KEINOS/go-bayes/blob/main/go.mod)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-blue?logo=go)](https://github.com/KEINOS/go-bayes/blob/main/go.mod)
 [![Go Reference](https://pkg.go.dev/badge/github.com/KEINOS/go-bayes/bayes.svg)](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes)
 
 # go-bayes
 
-`github.com/KEINOS/go-bayes/bayes` is a Go package for Bayesian inference.
+`github.com/KEINOS/go-bayes/bayes` is a Bayesian inference package for Go. Its current predictor is a Folded Context Transition Predictor (FCTP).
 
-## Highlights
+The package learns transitions from an ordered context to a possible next value. It converts supported values to fixed-width item IDs, folds a variable-length context into one fixed-width context ID, scores the learned candidate transitions, and returns the most likely class ID. Use `GetClass` to resolve that ID to the original value recorded during training.
 
-- Constructor-based API with explicit dependencies via `New` and `NewPredictor`.
-- Fast, deterministic transition hashing with xxHash3 by default and optional BLAKE3.
-- JSON serialization/deserialization support for predictor state.
-- In-memory storage backend optimized for deterministic tests and examples.
+The predictor uses learned probabilities to estimate the most likely next value for an observed context. Its scoring calculation is based on Bayes' theorem. It is not a Naive Bayes classifier. It learns transitions from an ordered context to the value that follows it.
 
-## Usage
+> [!IMPORTANT]
+> The latest published release is `v0.0.3`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility. The API can change before the first stable release.
+
+## How It Learns
+
+Training an ordered sequence `A -> B -> C -> D` records direct transitions and folded suffix contexts for each observed next value. The knowledge relevant to `D` includes:
+
+```text
+C             -> D
+FOLD(C)       -> D
+FOLD(B, C)    -> D
+FOLD(A, B, C) -> D
+```
+
+Calling `Predict([]T{A, B, C})` computes `FOLD(A, B, C)`, compares the learned candidate class IDs, and returns the highest-scoring ID. Training also records contexts that predict `B` and `C`; every item after the first item in a training sequence is a possible class.
+
+The current predictor matches deterministic folded IDs. It does not calculate similarity between values and does not automatically retry shorter contexts when a full context is unknown. A caller can implement backoff by retrying shorter suffixes.
+
+## Quick Start
+
+Install the module:
 
 ```sh
-# Download the module
-go get github.com/KEINOS/go-bayes/bayes
+go get github.com/KEINOS/go-bayes@latest
 ```
 
-```go
-// Import the package
-import "github.com/KEINOS/go-bayes/bayes"
-```
-
-### Constructor-Based API (Recommended)
-
-The `New` instance-based API is the recommended approach for new code and
-provides better isolation, testability, and control over dependencies.
+Train a sequence and predict its next value:
 
 ```go
 package main
 
 import (
-    "fmt"
-    "log"
+ "fmt"
+ "log"
 
-    "github.com/KEINOS/go-bayes/bayes"
+ "github.com/KEINOS/go-bayes/bayes"
 )
 
 func main() {
-    // Create a new predictor instance
-    predictor, err := bayes.New(bayes.MemoryStorage, 0)
-    if err != nil {
-        log.Fatal(err)
-    }
+ predictor, err := bayes.New(bayes.MemoryStorage, 100)
+ if err != nil {
+  log.Fatal(err)
+ }
 
-    // Train the predictor
-    score := []string{
-        "So", "So", "La", "So", "Do", "Si",
-        "So", "So", "La", "So", "Re", "Do",
-        "So", "So", "So", "Mi", "Do", "Si", "La",
-        "Fa", "Fa", "Mi", "Do", "Re", "Do",
-    }
-    if err := predictor.Train(score); err != nil {
-        log.Fatal(err)
-    }
+ melody := []string{
+  "So", "So", "La", "So", "Do", "Si",
+  "So", "So", "La", "So", "Re", "Do",
+ }
 
-    // Predict next item
-    nextID, err := predictor.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
-    if err != nil {
-        log.Fatal(err)
-    }
+ err = predictor.Train(melody)
+ if err != nil {
+  log.Fatal(err)
+ }
 
-    // Get the original value
-    nextNote := predictor.GetClass(nextID)
-    fmt.Printf("Next note: %v\n", nextNote)
-    // Output: Next note: So
+ classID, err := predictor.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
+ if err != nil {
+  log.Fatal(err)
+ }
+
+ fmt.Println(predictor.GetClass(classID))
+ // Output: So
 }
 ```
 
-- [View it online](https://go.dev/play/p/N2-0xNxAKp9) @ GoPlayground
+`New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for context folding by default. A `Predictor` is not safe for concurrent use; callers must synchronize shared access.
 
-### Persist and Restore Predictor State (JSON)
+## Value and ID Semantics
 
-`Predictor` supports `encoding/json` marshaling and unmarshaling.
+`Train`, `Predict`, and `HashTrans` accept slices or values composed of these built-in types:
+
+- `bool` and `string`;
+- `int`, `int16`, `int32`, and `int64`;
+- `uint`, `uint16`, `uint32`, and `uint64`;
+- `float32` and `float64`.
+
+Integer values preserve their bit pattern. Strings receive deterministic fixed-width IDs. Floating-point values are currently converted with `uint64(value)`, so fractional parts are discarded; use scaled integers or canonical strings when fractions are significant.
+
+IDs are deterministic identifiers, not collision-free or reversible encodings. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
+
+## Hashers
+
+xxHash3 is the default context-folding algorithm. Select BLAKE3 when compatibility with BLAKE3-derived context IDs is required:
+
+```go
+predictor, err := bayes.New(
+ bayes.MemoryStorage,
+ 42,
+ bayes.WithHasher("blake3"),
+)
+```
+
+Use `NewPredictor` to inject a custom implementation of `bayes.Hasher`:
+
+```go
+predictor, err := bayes.NewPredictor(bayes.PredictorConfig{
+ Storage: bayes.MemoryStorage,
+ ScopeID: 42,
+ Hasher:  customHasher,
+})
+```
+
+Changing the hasher changes context IDs. Use the same algorithm for training and prediction.
+
+The selected hasher folds a context into one context ID. String values use their own fixed BLAKE3-based item IDs before the context is folded.
+
+## Persistence
+
+`Predictor` implements `encoding/json` marshaling and unmarshaling for `MemoryStorage`:
 
 ```go
 payload, err := json.Marshal(predictor)
 if err != nil {
-    log.Fatal(err)
+ log.Fatal(err)
 }
 
 var restored bayes.Predictor
-if err := json.Unmarshal(payload, &restored); err != nil {
-    log.Fatal(err)
+
+err = json.Unmarshal(payload, &restored)
+if err != nil {
+ log.Fatal(err)
 }
 ```
 
-Use this when you want to save a trained model snapshot and restore it later.
+The JSON format stores transition state, scope, storage type, and the class map. JSON does not preserve the exact Go type of numeric class values. For example, an `int` class value is restored as `float64`.
 
-## Examples
+The format does not store the selected hasher. Unmarshaling selects the default xxHash3 hasher. After restoring data trained with BLAKE3 or a custom hasher, call `SetHasher` with the matching implementation before prediction.
 
-- [Examples overview](_examples/README.md)
-- [Training with a slice of boolean values](
-  https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-Train-Bool)
-- [Training with a slice of int values](
-  https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-Train-Int)
-- [Iris dataset example](_examples/iris/README.md)
+`Reset` clears learned transitions and classes. `SetStorage` selects the backend used by the next `Reset`; only `MemoryStorage` is currently implemented.
+
+## Runnable Example
+
+The [Iris example](_examples/iris/README.md) trains all 150 records from the original UCI CSV data and demonstrates the complete constructor, training, prediction, and class-resolution flow:
+
+```sh
+go run ./_examples/iris
+```
+
+See the [examples overview](_examples/README.md) for validation commands and additional examples.
 
 ## Package Structure
 
-- `bayes`: Public API and predictor implementation.
-- `bayes/internal/theorem`: Core Bayes theorem computation.
-- `bayes/internal/nodeloggers/logmem`: In-memory transition counter and probability source.
-- `bayes/hasher`: Transition hasher interface.
-- `bayes/internal/hashers/xxHash3base`: Default xxHash3 implementation for flow IDs.
-- `bayes/internal/hashers/blake3base`: Optional BLAKE3 implementation for flow IDs.
-- `bayes/nodelogger`: Public node logger interface used by `Predictor`.
+- `bayes`: Public constructor, predictor, persistence, and hasher selection API.
+- `bayes/hasher`: Public transition-hasher interface.
+- `bayes/nodelogger`: Public transition-statistics interface.
+- `bayes/internal/hashers/xxHash3base`: Default xxHash3 context hasher.
+- `bayes/internal/hashers/blake3base`: Optional BLAKE3 context hasher.
+- `bayes/internal/nodeloggers/logmem`: In-memory transition statistics.
+- `bayes/internal/theorem`: Current Bayes-based scoring helper.
 
 ```mermaid
 flowchart TD
-        A[bayes public API] --> B[internal/theorem]
-    A --> C[internal/nodeloggers/logmem]
-    A --> D[hasher]
-        D --> E[internal/hashers/xxHash3base]
-        D --> G[internal/hashers/blake3base]
-    A --> F[nodelogger]
+    A[bayes Predictor] --> B[context Hasher]
+    A --> C[NodeLogger]
+    C --> D[theorem scoring helper]
+    B --> E[xxHash3 default]
+    B --> F[BLAKE3 optional]
+    C --> G[in-memory storage]
 ```
 
 ## Development
 
-Run tests:
+Run the complete local validation gate:
 
 ```sh
-go test ./...
+make check
 ```
 
-Run coverage:
+Run individual checks:
 
 ```sh
-go test -cover ./...
+make test
+make test_example
+make coverage
+make bench
+make fuzz
 ```
 
-Run static checks:
+The library packages have 100% statement coverage. `make coverage` uses a 99.9% minimum. Directories beginning with `_` are excluded from Go's default `./...` expansion, so `make test_example` finds and tests each runnable example explicitly.
 
-```sh
-go vet ./...
-golangci-lint run --fix
-```
+## Roadmap
 
-## Glossary
+- Add a pruning policy for low-value transitions.
+- Add persistent storage backends such as SQLite.
+- Evaluate explicit suffix backoff strategies.
+- Explore optional order-invariant and neural-style modes without changing the default FCTP contract.
+- Add more runnable, real-data examples.
 
-- Prior probability: The base chance of an event before observing new context.
-- Node: A unit item in the sequence (for example a note or token).
-- Flow ID: A deterministic hash generated from transitions.
-- Transition: The move from one node to the next.
-- Class: The original value stored behind an internal numeric ID.
-
-## Advanced Configuration
-
-`New` uses xxHash3 by default. Select BLAKE3 when compatibility with BLAKE3
-flow IDs is required:
-
-```go
-predictor, err := bayes.New(
-    bayes.MemoryStorage,
-    42,
-    bayes.WithHasher("blake3"),
-)
-```
-
-Use `NewPredictor` when you need to inject a custom hasher or build a
-predictor from an explicit config object.
-
-```go
-predictor, err := bayes.NewPredictor(bayes.PredictorConfig{
-    Storage: bayes.MemoryStorage,
-    ScopeID: 42,
-    Hasher:  customHasher,
-})
-```
-
-## Contribute
+## Contributing
 
 [![unit-test](https://github.com/KEINOS/go-bayes/actions/workflows/unit-test.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/unit-test.yml)
-[![golangci-lint](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml "Static Analysis")
-[![codecov](https://codecov.io/gh/KEINOS/go-bayes/branch/main/graph/badge.svg?token=k0VCclM4G7)](https://codecov.io/gh/KEINOS/go-bayes "Code Coverage")
+[![golangci-lint](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/golangci-lint.yml "Static analysis")
+[![codecov](https://codecov.io/gh/KEINOS/go-bayes/branch/main/graph/badge.svg?token=k0VCclM4G7)](https://codecov.io/gh/KEINOS/go-bayes "Code coverage")
 [![CodeQL](https://github.com/KEINOS/go-bayes/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/KEINOS/go-bayes/actions/workflows/codeql-analysis.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/KEINOS/go-bayes)](https://goreportcard.com/report/github.com/KEINOS/go-bayes "View Report Card")
+[![Go Report Card](https://goreportcard.com/badge/github.com/KEINOS/go-bayes)](https://goreportcard.com/report/github.com/KEINOS/go-bayes "View report card")
 
-- Any PullRequest for improvement are welcome!
-- Branch to PR: `main`
-  - [Draft PR](https://github.blog/2019-02-14-introducing-draft-pull-requests/)
-        before full implementation is recommended.
-- We will merge any PR for the better, as long as it passes the
-    [CI](https://github.com/KEINOS/go-bayes/actions)s and not a
-    prank-kind commit. ;-)
-
-## v2 Release (Current)
-
-This is v2 of go-bayes with the following breaking changes from v1:
-
-- **Removed** all package-level legacy API functions (`Train`, `Predict`, `GetClass`, `SetStorage`, `SetHasher`, `Reset`).
-- **Removed** compatibility alias `UnknwonStorage`; use `UnknownStorage` only.
-- **Removed** global state and singleton pattern; all operations are instance-based via `Predictor`.
-
-If you are upgrading from v1, see the [Usage](#usage) section for the
-constructor-based API pattern.
-
-## Wishlist/Todo
-
-- [x] ~~100% code coverage for the current implementation~~
-- [x] ~~fix all golangci-lint issues for the current implementation~~
-- [x] ~~vulnerability scanning with CodeQL~~
-- [x] ~~feat CIs with GitHub Actions~~
-- [x] ~~feat benchmarking~~ (implemented in Phase 4)
-- [x] ~~feat dumping the trained model to a file~~ (JSON serialization in Phase 8-2)
-- [ ] testdata with big sized data
-- [ ] SQLite3 as a storage backend
-    (implementation of [NodeLogger](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#NodeLogger) with SQLite3)
-- [ ] more examples of use cases
-- [ ] simple command tool to train and predict
+Changes should include appropriate tests or runnable examples and pass `make check`. Open pull requests against `main`; a draft pull request is welcome while work is in progress.

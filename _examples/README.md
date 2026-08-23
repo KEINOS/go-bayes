@@ -4,14 +4,11 @@ This directory contains runnable examples for `go-bayes`.
 
 ## Purpose
 
-Each example is isolated so contributors can understand behavior without
-reading all package internals.
+Each example is isolated so contributors can understand behavior without reading all package internals.
 
 ## Available Examples
 
-- [`iris/`](iris/): Trains and queries a predictor with the original
-  comma-separated Iris data distributed by the UCI Machine Learning
-  Repository.
+- [`iris/`](iris/): Trains and queries a predictor with the original comma-separated Iris data distributed by the UCI Machine Learning Repository.
 
 ## How To Run
 

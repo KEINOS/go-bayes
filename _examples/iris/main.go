@@ -31,7 +31,7 @@ const (
 var rawIrisData []byte
 
 type irisSample struct {
-	measurements [4]float64
+	measurements [4]string
 	species      string
 }
 
@@ -61,7 +61,7 @@ func readIris(input io.Reader) ([]irisSample, error) {
 		sample := new(irisSample)
 
 		for columnIndex := range sample.measurements {
-			measurement, err := strconv.ParseFloat(fields[columnIndex], 64)
+			_, err := strconv.ParseFloat(fields[columnIndex], 64)
 			if err != nil {
 				return nil, fmt.Errorf(
 					"parse Iris row %d column %d: %w",
@@ -71,7 +71,7 @@ func readIris(input io.Reader) ([]irisSample, error) {
 				)
 			}
 
-			sample.measurements[columnIndex] = measurement
+			sample.measurements[columnIndex] = fields[columnIndex]
 		}
 
 		sample.species = strings.TrimSpace(fields[4])
@@ -105,10 +105,10 @@ func run(output io.Writer) error {
 		return fmt.Errorf("write training summary: %w", err)
 	}
 
-	queries := [][4]float64{
-		{5.1, 3.5, 1.4, 0.2},
-		{7.0, 3.2, 4.7, 1.4},
-		{6.3, 3.3, 6.0, 2.5},
+	queries := [][4]string{
+		{"5.1", "3.5", "1.4", "0.2"},
+		{"7.0", "3.2", "4.7", "1.4"},
+		{"6.3", "3.3", "6.0", "2.5"},
 	}
 
 	for _, measurements := range queries {
@@ -126,7 +126,7 @@ func run(output io.Writer) error {
 
 		_, err = fmt.Fprintf(
 			output,
-			"%.1f, %.1f, %.1f, %.1f -> %s\n",
+			"%s, %s, %s, %s -> %s\n",
 			measurements[0],
 			measurements[1],
 			measurements[2],

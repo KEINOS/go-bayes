@@ -24,7 +24,7 @@ func New() *Hasher {
 	return &Hasher{}
 }
 
-// HashTrans returns an xxHash3 flow ID for the input transitions.
+// HashTrans folds the ordered transition IDs into an xxHash3 context ID.
 func (h *Hasher) HashTrans(transitions ...uint64) (uint64, error) {
 	var inline [inlineTransitionCapacity * bytesPerTransition]byte
 

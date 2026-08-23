@@ -1,6 +1,5 @@
-/*
-Package theorem is an Bayes' theorem implementation.
-*/
+// Package theorem provides the Bayesian inference calculation used to score
+// possible next values. The predictor is not a Naive Bayes implementation.
 package theorem
 
 // Bayes returns the posterior probability by Bayes' theorem.

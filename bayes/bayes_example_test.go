@@ -80,10 +80,10 @@ func Example_iris() {
 		log.Panic(err)
 	}
 
-	// Create a new classifier (predictor) with in-memory storage and a unique scope ID.
-	classifierID := uint64(4)
+	// Create an independent predictor with an application-defined scope ID.
+	scopeID := uint64(4)
 
-	predictor, err := bayes.New(bayes.MemoryStorage, classifierID)
+	predictor, err := bayes.New(bayes.MemoryStorage, scopeID)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -129,10 +129,10 @@ func Example_iris() {
 // ----------------------------------------------------------------------------
 
 func ExampleNew() {
-	// Scope ID is used to distinguish the stored data.
+	// The predictor and its storage logger report this application-defined ID.
 	scopeID := uint64(100)
 
-	// Create a new bayes instance with in-memory storage.
+	// Create a predictor with in-memory storage.
 	predictor, err := bayes.New(bayes.MemoryStorage, scopeID)
 	if err != nil {
 		log.Fatal(err)

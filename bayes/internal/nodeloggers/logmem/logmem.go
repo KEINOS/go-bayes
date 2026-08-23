@@ -59,21 +59,19 @@ func (n NodeLog) ID() uint64 {
 	return n.nodeID
 }
 
-// Predict returns the probability of the next node to be toNodeB if the incoming
-// node is fromNodeA.
+// Predict returns the score for toNodeB after fromNodeA.
 func (n NodeLog) Predict(fromNodeA, toNodeB uint64) float64 {
-	// Prior probability: base chance of going to node B.
+	// Base frequency of going to node B.
 	PriorProbToB := n.PriorProbTo(toNodeB)
-	// Likelihood: chance of seeing incoming node A when next node is B.
+	// Frequency of the A-to-B pair.
 	PriorProbFromAtoB := n.PriorProbFromTo(fromNodeA, toNodeB)
-	// Counter likelihood: chance of seeing incoming node A when next node is not B.
+	// Frequency of A followed by a value other than B.
 	PriorProbNotFromAtoB := n.PriorProbNotFromTo(fromNodeA, toNodeB)
 
 	return theorem.Bayes(PriorProbToB, PriorProbFromAtoB, PriorProbNotFromAtoB)
 }
 
-// PriorProbFromTo returns the prior probability of the node to be B if the
-// previous node is A.
+// PriorProbFromTo returns the frequency of the fromA-toB pair among all updates.
 func (n NodeLog) PriorProbFromTo(fromA, toB uint64) float64 {
 	if n.totalAccesses == 0 {
 		return 0
@@ -82,8 +80,8 @@ func (n NodeLog) PriorProbFromTo(fromA, toB uint64) float64 {
 	return float64(n.fromAToB[fromA][toB]) / float64(n.totalAccesses)
 }
 
-// PriorProbNotFromTo returns the prior probability of the node not to be B
-// if the previous node is A.
+// PriorProbNotFromTo returns the frequency of fromA followed by a value other
+// than toB among all updates.
 func (n NodeLog) PriorProbNotFromTo(fromA, toB uint64) float64 {
 	if n.totalAccesses == 0 {
 		return 0
@@ -94,10 +92,7 @@ func (n NodeLog) PriorProbNotFromTo(fromA, toB uint64) float64 {
 	return float64(notA) / float64(n.totalAccesses)
 }
 
-// PriorProbTo returns the prior probability of the outgoing node to be nodeB.
-//
-// Which is the number of outgoing accesses to the node B out of the total number
-// of accesses of current node.
+// PriorProbTo returns the frequency of nodeB among all outgoing updates.
 func (n NodeLog) PriorProbTo(nodeB uint64) float64 {
 	if n.totalAccesses == 0 {
 		return 0

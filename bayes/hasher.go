@@ -11,7 +11,7 @@ import (
 
 var errUnknownHasher = errors.New("unknown hasher")
 
-// Hasher hashes transition IDs into a flow ID.
+// Hasher folds ordered item IDs into one fixed-width context ID.
 type Hasher = hasher.TransitionHasher
 
 // Option configures a Predictor created by New.
@@ -24,7 +24,7 @@ func NewBlake3Hasher() Hasher {
 	return blake3base.New()
 }
 
-// NewDefaultHasher returns the current default hasher implementation.
+// NewDefaultHasher returns the xxHash3 context hasher.
 //
 //nolint:ireturn // returning interface is intentional for algorithm swapping.
 func NewDefaultHasher() Hasher {
@@ -38,7 +38,7 @@ func NewXXHash3Hasher() Hasher {
 	return xxhash3base.New()
 }
 
-// WithHasher selects the transition hasher used by a Predictor.
+// WithHasher selects the context hasher used by a Predictor.
 // Supported names are "blake3" and "xxhash3".
 func WithHasher(name string) Option {
 	return func(config *PredictorConfig) error {

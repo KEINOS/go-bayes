@@ -30,15 +30,16 @@ var (
 	errConvAnyToUint64Unsupported = errors.New("unsupported type for conversion")
 )
 
-// PredictorConfig defines dependencies and initial settings for Predictor.
+// PredictorConfig defines the storage, scope, and context hasher used by a
+// Predictor. A nil Hasher selects [NewDefaultHasher].
 type PredictorConfig struct {
 	Storage Storage
 	ScopeID uint64
 	Hasher  Hasher
 }
 
-// Predictor provides an instance-based API without package-level singleton
-// coupling.
+// Predictor learns transitions from folded ordered contexts to possible next
+// values. Each instance owns its transition statistics and class map.
 //
 // Predictor is not safe for concurrent use from multiple goroutines.
 // Use external synchronization if needed.
@@ -50,8 +51,8 @@ type Predictor struct {
 	hasher    Hasher
 }
 
-// NewPredictor creates a new Predictor instance from config.
-// A nil config Hasher selects xxHash3.
+// NewPredictor creates a Predictor from config. A nil config Hasher selects
+// [NewDefaultHasher], which currently returns the xxHash3 implementation.
 func NewPredictor(config PredictorConfig) (*Predictor, error) {
 	hasher := config.Hasher
 	if hasher == nil {
@@ -81,12 +82,14 @@ func (p *Predictor) ID() uint64 {
 	return p.scopeID
 }
 
-// SetStorage sets storage for next Reset.
+// SetStorage selects the storage backend that the next [Predictor.Reset] uses.
+// It does not move or modify the predictor's current learned state.
 func (p *Predictor) SetStorage(storage Storage) {
 	p.storage = storage
 }
 
-// SetHasher sets hasher used by HashTrans.
+// SetHasher selects the algorithm used to fold contexts. Training and
+// prediction must use the same algorithm for their context IDs to match.
 func (p *Predictor) SetHasher(hasher Hasher) error {
 	if hasher == nil {
 		return errPredictorHasherNil
@@ -97,7 +100,8 @@ func (p *Predictor) SetHasher(hasher Hasher) error {
 	return nil
 }
 
-// Reset recreates predictor state with current storage and scope settings.
+// Reset recreates the storage backend and clears all learned transitions and
+// class values. It preserves the current scope ID and hasher.
 func (p *Predictor) Reset() error {
 	predictor, err := newNodeLogger(p.storage, p.scopeID)
 	if err != nil {
@@ -110,12 +114,15 @@ func (p *Predictor) Reset() error {
 	return nil
 }
 
-// GetClass returns original value for classID.
+// GetClass resolves classID to the original value recorded during training. It
+// returns nil when classID is unknown.
 func (p *Predictor) GetClass(classID uint64) any {
 	return p.classes[classID].Raw
 }
 
-// HashTrans returns a flow ID for transitions.
+// HashTrans converts supported values to item IDs and folds their ordered
+// sequence into one deterministic context ID. The result is fixed-width but is
+// not guaranteed to be collision-free or reversible.
 func (p *Predictor) HashTrans(transitions ...any) (uint64, error) {
 	if p.hasher == nil {
 		return 0, errPredictorHasherUninit
@@ -140,7 +147,14 @@ func (p *Predictor) HashTrans(transitions ...any) (uint64, error) {
 	return flowID, nil
 }
 
-// Predict infers next class ID from items.
+// Predict folds items as one ordered context, scores every learned candidate,
+// and returns the highest-scoring class ID. Use [Predictor.GetClass] to resolve
+// the ID to its original value.
+//
+// Predict does not perform similarity matching or automatic suffix backoff. It
+// returns zero when no candidate receives a positive score. Zero can also be a
+// valid class ID. If candidates have the same highest score, either candidate
+// can be returned.
 func (p *Predictor) Predict(items any) (uint64, error) {
 	if p.predictor == nil {
 		return 0, errPredictorNotInitialized
@@ -176,7 +190,10 @@ func (p *Predictor) Predict(items any) (uint64, error) {
 	return biggest.Class, nil
 }
 
-// Train updates predictor with observed item sequence.
+// Train learns each next value in an observed sequence. For every value after
+// the first, it records the direct predecessor transition and transitions from
+// every folded suffix of the preceding context. Each observed next value also
+// becomes a candidate class that [Predictor.Predict] can return.
 func (p *Predictor) Train(items any) error {
 	if p.predictor == nil {
 		err := p.Reset()
@@ -259,7 +276,9 @@ type predictorJSON struct {
 	NodeLog *logmem.Snapshot      `json:"nodeLog,omitempty"`
 }
 
-// MarshalJSON exports Predictor state for MemoryStorage.
+// MarshalJSON exports MemoryStorage transition state, scope, storage type, and
+// class values. JSON does not preserve the exact Go type of numeric class
+// values. The selected hasher is not included in the JSON representation.
 func (p *Predictor) MarshalJSON() ([]byte, error) {
 	payload := predictorJSON{
 		Storage: p.storage,
@@ -293,7 +312,10 @@ func (p *Predictor) MarshalJSON() ([]byte, error) {
 	return raw, nil
 }
 
-// UnmarshalJSON imports Predictor state previously exported by MarshalJSON.
+// UnmarshalJSON imports state previously exported by [Predictor.MarshalJSON].
+// JSON numeric class values are restored as float64. UnmarshalJSON selects
+// [NewDefaultHasher]; callers restoring state trained with another hasher must
+// set the matching hasher before prediction.
 func (p *Predictor) UnmarshalJSON(data []byte) error {
 	var payload predictorJSON
 

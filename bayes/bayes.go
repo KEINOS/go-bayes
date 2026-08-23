@@ -1,4 +1,10 @@
-// Package bayes provides Bayesian sequence prediction utilities.
+// Package bayes provides Bayesian inference with a Folded Context Transition
+// Predictor (FCTP).
+//
+// A Predictor converts supported values to fixed-width IDs, folds an ordered
+// context into one context ID, and learns transitions from that ID to possible
+// next-value class IDs. It uses Bayes' theorem to estimate the most likely next
+// value for an observed context. It is not a Naive Bayes classifier.
 package bayes
 
 import (
@@ -49,7 +55,8 @@ func (s Storage) Type() string {
 //  Constructor
 // ----------------------------------------------------------------------------
 
-// New returns a new Predictor instance. With no options, New uses xxHash3.
+// New returns an isolated Predictor using the requested storage and scope. With
+// no options, it uses xxHash3 context folding.
 func New(engine Storage, scopeID uint64, options ...Option) (*Predictor, error) {
 	config := PredictorConfig{
 		Storage: engine,

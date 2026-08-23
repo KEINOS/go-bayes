@@ -143,10 +143,11 @@ The format does not store the selected hasher. Unmarshaling selects the default 
 
 ## Runnable Example
 
-The [Iris example](_examples/iris/README.md) trains all 150 records from the original UCI CSV data and demonstrates the complete constructor, training, prediction, and class-resolution flow. The [Wine example](_examples/wine/README.md) repeats the flow with 13 ordered chemical measurements and three classes.
+The [Iris example](_examples/iris/README.md) trains all 150 records from the original UCI CSV data and demonstrates the complete constructor, training, prediction, and class-resolution flow. The [Wine example](_examples/wine/README.md) uses 13 ordered numeric measurements. The [Mushroom example](_examples/mushroom/README.md) uses 22 categorical values, including a missing-value token.
 
 ```sh
 go run ./_examples/iris
+go run ./_examples/mushroom
 go run ./_examples/wine
 ```
 

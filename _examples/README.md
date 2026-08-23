@@ -9,6 +9,7 @@ Each example is isolated so contributors can understand behavior without reading
 ## Available Examples
 
 - [`iris/`](iris/): Trains and queries a predictor with the original comma-separated Iris data distributed by the UCI Machine Learning Repository.
+- [`mushroom/`](mushroom/): Uses 22 categorical features, including a missing-value token, to recover an edible or poisonous class.
 - [`wine/`](wine/): Uses all 13 chemical measurements from the UCI Wine dataset to recover one of three cultivar classes.
 
 ## How To Run
@@ -17,6 +18,7 @@ From repository root:
 
 ```sh
 go run ./_examples/iris
+go run ./_examples/mushroom
 go run ./_examples/wine
 ```
 

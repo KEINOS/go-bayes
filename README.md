@@ -9,7 +9,7 @@ It learns ordered sequences and predicts the value that is likely to come next. 
 
 > [!IMPORTANT]
 > **The API can change before the first stable release.**
-> The latest published release is `v0.0.3`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility.
+> The latest published release is `v0.0.4`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility.
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ import "github.com/KEINOS/go-bayes/bayes"
 
 ### String Sequence
 
-Train a sequence and predict its next value. Imports and the outer `main` function are omitted here:
+Train a sequence and predict its next value.
 
 ```go
 const datasetID uint64 = 100
@@ -55,11 +55,11 @@ fmt.Println(predictor.GetClass(classID))
 // Output: So
 ```
 
-See the [complete melody program](_examples/melody/README.md).
+View the [complete source](_examples/melody/main.go), or [run it online](https://go.dev/play/p/FYL7mIvcSNa).
 
 ### Integer Sequence
 
-The same API accepts discrete integer values. This example learns HTTP status history and predicts recovery after rate limiting and a temporary outage. Imports and the outer `main` function are omitted here:
+The same API accepts discrete integer values. This example learns HTTP status history and predicts recovery after rate limiting and a temporary outage.
 
 ```go
 const datasetID uint64 = 101
@@ -102,7 +102,7 @@ fmt.Println(predictor.GetClass(classID))
 // Output: 200
 ```
 
-See the [complete HTTP status program](_examples/http_status/README.md).
+View the [complete source](_examples/http_status/main.go), or [run it online](https://go.dev/play/p/QPbxmh_g_4a).
 
 > [!NOTE]
 >
@@ -118,6 +118,8 @@ A context can be a time sequence or an ordered set of features. The [examples ov
 * [Iris](_examples/iris/README.md): Predict a species from four ordered measurements.
 * [Wine](_examples/wine/README.md): Predict a cultivar class from 13 ordered measurements.
 * [Mushroom](_examples/mushroom/README.md): Predict the edible or poisonous class from 22 ordered categorical features.
+
+The [Go Reference examples](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#pkg-examples) provide shorter examples for [melody](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-package), [Iris](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-package-Iris), [`New`](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-New), [`WithHasher`](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-WithHasher), and [`Storage.Type`](https://pkg.go.dev/github.com/KEINOS/go-bayes/bayes#example-Storage.Type).
 
 ## Features and Behavior
 

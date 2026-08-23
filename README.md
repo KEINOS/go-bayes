@@ -14,21 +14,6 @@ See the [technical specification](SPEC.md) for the two-ID learning model, contex
 > [!IMPORTANT]
 > The latest published release is `v0.0.3`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility. The API can change before the first stable release.
 
-## How It Learns
-
-Training an ordered sequence `A -> B -> C -> D` records direct transitions and folded suffix contexts for each observed next value. The knowledge relevant to `D` includes:
-
-```text
-C             -> D
-FOLD(C)       -> D
-FOLD(B, C)    -> D
-FOLD(A, B, C) -> D
-```
-
-Calling `Predict([]T{A, B, C})` computes `FOLD(A, B, C)`, compares the learned candidate class IDs, and returns the highest-scoring ID. Training also records contexts that predict `B` and `C`; every item after the first item in a training sequence is a possible class.
-
-The current predictor matches deterministic folded IDs. It does not calculate similarity between values and does not automatically retry shorter contexts when a full context is unknown. A caller can implement backoff by retrying shorter suffixes.
-
 ## Quick Start
 
 Install the module:
@@ -89,6 +74,21 @@ func main() {
 Integer values preserve their bit pattern. Strings receive deterministic fixed-width IDs. Floating-point values are currently converted with `uint64(value)`, so fractional parts are discarded; use scaled integers or canonical strings when fractions are significant.
 
 IDs are deterministic identifiers, not collision-free or reversible encodings. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
+
+## How It Learns
+
+Training an ordered sequence `A -> B -> C -> D` records direct transitions and folded suffix contexts for each observed next value. The knowledge relevant to `D` includes:
+
+```text
+C             -> D
+FOLD(C)       -> D
+FOLD(B, C)    -> D
+FOLD(A, B, C) -> D
+```
+
+Calling `Predict([]T{A, B, C})` computes `FOLD(A, B, C)`, compares the learned candidate class IDs, and returns the highest-scoring ID. Training also records contexts that predict `B` and `C`; every item after the first item in a training sequence is a possible class.
+
+The current predictor matches deterministic folded IDs. It does not calculate similarity between values and does not automatically retry shorter contexts when a full context is unknown. A caller can implement backoff by retrying shorter suffixes.
 
 ## Hashers
 

@@ -11,6 +11,10 @@ import (
 
 var errHashFailed = errors.New("hash failed")
 
+// ----------------------------------------------------------------------------
+//  Helper types and functions for testing
+// ----------------------------------------------------------------------------
+
 type stubHasher struct {
 	got []uint64
 	out uint64
@@ -26,6 +30,24 @@ func (s *stubHasher) HashTrans(transitions ...uint64) (uint64, error) {
 
 	return s.out, nil
 }
+
+type stubNodeLogger struct{}
+
+func (stubNodeLogger) ID() uint64 { return 0 }
+
+func (stubNodeLogger) Predict(_, _ uint64) float64 { return 0 }
+
+func (stubNodeLogger) PriorProbTo(uint64) float64 { return 0 }
+
+func (stubNodeLogger) PriorProbFromTo(_, _ uint64) float64 { return 0 }
+
+func (stubNodeLogger) PriorProbNotFromTo(_, _ uint64) float64 { return 0 }
+
+func (stubNodeLogger) Update(_, _ uint64) {}
+
+// ----------------------------------------------------------------------------
+//  NewPredictor
+// ----------------------------------------------------------------------------
 
 func TestNewPredictor_success(t *testing.T) {
 	t.Parallel()
@@ -56,6 +78,10 @@ func TestNewPredictor_unknownStorage(t *testing.T) {
 	require.Nil(t, instance)
 	require.ErrorContains(t, err, "failed to create predictor")
 }
+
+// ----------------------------------------------------------------------------
+//  Predictor
+// ----------------------------------------------------------------------------
 
 func TestPredictor_SetHasher_nil(t *testing.T) {
 	t.Parallel()
@@ -507,17 +533,3 @@ func TestPredictor_UnmarshalJSON_withoutNodeLog(t *testing.T) {
 	require.NotNil(t, instance.predictor)
 	require.NotNil(t, instance.classes)
 }
-
-type stubNodeLogger struct{}
-
-func (stubNodeLogger) ID() uint64 { return 0 }
-
-func (stubNodeLogger) Predict(_, _ uint64) float64 { return 0 }
-
-func (stubNodeLogger) PriorProbTo(uint64) float64 { return 0 }
-
-func (stubNodeLogger) PriorProbFromTo(_, _ uint64) float64 { return 0 }
-
-func (stubNodeLogger) PriorProbNotFromTo(_, _ uint64) float64 { return 0 }
-
-func (stubNodeLogger) Update(_, _ uint64) {}

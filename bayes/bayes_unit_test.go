@@ -9,7 +9,7 @@ import (
 )
 
 // ----------------------------------------------------------------------------
-//  addClass
+//  Helper Functions
 // ----------------------------------------------------------------------------
 
 func newTestPredictor(t *testing.T) *Predictor {
@@ -24,6 +24,10 @@ func newTestPredictor(t *testing.T) *Predictor {
 
 	return instance
 }
+
+// ----------------------------------------------------------------------------
+//  addClass
+// ----------------------------------------------------------------------------
 
 func Test_addClass(t *testing.T) {
 	t.Parallel()
@@ -149,11 +153,17 @@ func TestNew_returnsPredictorSupportingTypedSlices(t *testing.T) {
 	require.Equal(t, uint64(100), instance.ID())
 
 	err = instance.Train([]string{"So", "So", "La", "So", "Do", "Si"})
-	require.NoError(t, err)
+	require.NoError(t, err,
+		"unexpected error during training")
 
 	classID, err := instance.Predict([]string{"So", "So", "La", "So", "Do"})
-	require.NoError(t, err)
-	require.Equal(t, "Si", instance.GetClass(classID))
+	require.NoError(t, err,
+		"unexpected error during prediction")
+
+	expect := "Si"
+	actual := instance.GetClass(classID)
+	require.Equal(t, expect, actual,
+		"unexpected class predicted for the given input")
 }
 
 func TestNew_hasherOptions(t *testing.T) {
@@ -203,8 +213,10 @@ func TestNew_rejectsNilOption(t *testing.T) {
 
 	predictor, err := New(MemoryStorage, 100, nil)
 
-	require.ErrorIs(t, err, errNewOptionNil)
-	require.Nil(t, predictor)
+	require.ErrorIs(t, err, errNewOptionNil,
+		"returned error should describe the error reason")
+	require.Nil(t, predictor,
+		"returned predictor should be nil on error")
 }
 
 func TestNew_rejectsInvalidHasherOption(t *testing.T) {
@@ -212,9 +224,12 @@ func TestNew_rejectsInvalidHasherOption(t *testing.T) {
 
 	predictor, err := New(MemoryStorage, 100, WithHasher("sha256"))
 
-	require.Error(t, err)
-	require.Nil(t, predictor)
-	require.ErrorIs(t, err, errUnknownHasher)
+	require.Error(t, err,
+		"non-supported hasher option should error")
+	require.Nil(t, predictor,
+		"returned predictor should be nil on error")
+	require.ErrorIs(t, err, errUnknownHasher,
+		"returned error should describe the error reason")
 }
 
 // ----------------------------------------------------------------------------
@@ -232,10 +247,12 @@ func TestPredict_slice_of_unsupported_type(t *testing.T) {
 		*big.NewInt(9223372036854775807),
 	})
 
-	require.Error(t, err, "it should be an error if the input is a slice of unsupported type")
-	require.Zero(t, classPredicted, "it should be zero on error")
-
-	assert.Contains(t, err.Error(), "failed to hash the flow")
+	require.Error(t, err,
+		"it should be an error if the input is a slice of unsupported type")
+	require.Zero(t, classPredicted,
+		"it should be zero on error")
+	assert.Contains(t, err.Error(),
+		"failed to hash the flow")
 }
 
 func TestPredict_not_initialized(t *testing.T) {
@@ -251,10 +268,12 @@ func TestPredict_not_initialized(t *testing.T) {
 
 	classPredicted, err := instance.Predict([]any{byte(0x10)})
 
-	require.Error(t, err, "it should be an error if the predictor is not initialized")
-	require.Zero(t, classPredicted, "it should be zero on error")
-
-	assert.Contains(t, err.Error(), "predictor is not initialized")
+	require.Error(t, err,
+		"it should be an error if the predictor is not initialized")
+	require.Zero(t, classPredicted,
+		"it should be zero on error")
+	assert.Contains(t, err.Error(),
+		"predictor is not initialized")
 }
 
 // ----------------------------------------------------------------------------
@@ -301,7 +320,10 @@ func TestTrain_slice_of_unsupported_type(t *testing.T) {
 		*big.NewInt(9223372036854775807),
 	})
 
-	require.Error(t, err, "it should be an error if the input is a slice of unsupported type")
-	assert.Contains(t, err.Error(), "failed during training iteration")
-	assert.Contains(t, err.Error(), "unsupported type for conversion")
+	require.Error(t, err,
+		"it should be an error if the input is a slice of unsupported type")
+	assert.Contains(t, err.Error(),
+		"failed during training iteration")
+	assert.Contains(t, err.Error(),
+		"unsupported type for conversion")
 }

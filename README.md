@@ -109,6 +109,16 @@ See the [complete HTTP status program](_examples/http_status/README.md).
 > * `New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for context folding by default.
 > * A `Predictor` is not safe for concurrent use; callers must synchronize shared access.
 
+### More Examples
+
+A context can be a time sequence or an ordered set of features. The [examples overview](_examples/README.md) links to runnable programs for both uses:
+
+* [Melody](_examples/melody/README.md): Predict the next note in a string sequence.
+* [HTTP status](_examples/http_status/README.md): Predict the next status in an integer sequence.
+* [Iris](_examples/iris/README.md): Predict a species from four ordered measurements.
+* [Wine](_examples/wine/README.md): Predict a cultivar class from 13 ordered measurements.
+* [Mushroom](_examples/mushroom/README.md): Predict the edible or poisonous class from 22 ordered categorical features.
+
 ## Features and Behavior
 
 The predictor learns transitions from an ordered context to a possible next value. It uses learned probabilities to select the most likely class for the supplied context. This is Bayesian inference, but it is not a Naive Bayes classifier.
@@ -123,6 +133,8 @@ FOLD(C)       -> D
 FOLD(B, C)    -> D
 FOLD(A, B, C) -> D
 ```
+
+The first line is a direct item transition. The other lines use folded context IDs.
 
 Context order matters. The predictor matches exact folded IDs. It does not measure similarity between values or retry shorter contexts when the complete context is unknown.
 
@@ -190,16 +202,6 @@ The format does not store the selected hasher. Unmarshaling selects the default 
 ## Technical Details
 
 Read the [technical specification](SPEC.md) for the two-ID learning model, token IDs, context folding, suffix expansion, Bayesian scoring, class recovery, and current design limits.
-
-## Examples
-
-The [examples overview](_examples/README.md) links to all runnable programs:
-
-* [Melody](_examples/melody/README.md): String sequence prediction.
-* [HTTP status](_examples/http_status/README.md): Integer sequence prediction.
-* [Iris](_examples/iris/README.md): 150 records from the original UCI Iris data.
-* [Wine](_examples/wine/README.md): 13 ordered numeric measurements.
-* [Mushroom](_examples/mushroom/README.md): 22 categorical values.
 
 ## Contributing
 

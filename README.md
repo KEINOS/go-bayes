@@ -10,6 +10,8 @@ The package learns transitions from an ordered context to a possible next value.
 
 The predictor uses learned probabilities to estimate the most likely next value for an observed context. Its scoring calculation is based on Bayes' theorem. It is not a Naive Bayes classifier. It learns transitions from an ordered context to the value that follows it.
 
+See the [technical specification](SPEC.md) for the two-ID learning model, context folding, training expansion, and current design limits.
+
 > [!IMPORTANT]
 > The latest published release is `v0.0.3`. Until `v1.0.0`, a clear API, ease of use, and measured performance are more important than backward compatibility. The API can change before the first stable release.
 

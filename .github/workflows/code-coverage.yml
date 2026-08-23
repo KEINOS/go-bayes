@@ -2,6 +2,7 @@
 # It runs the unit test and pushes the measured code coverage analysis.
 name: "Codecov"
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 permissions:

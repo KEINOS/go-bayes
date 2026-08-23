@@ -24,100 +24,83 @@ go get github.com/KEINOS/go-bayes@latest
 
 ### String Sequence
 
-Train a sequence and predict its next value:
+Train a sequence and predict its next value. Imports and the outer `main`
+function are omitted here:
 
 ```go
-package main
-
-import (
- "fmt"
- "log"
-
- "github.com/KEINOS/go-bayes/bayes"
-)
-
-func main() {
- predictor, err := bayes.New(bayes.MemoryStorage, 100)
- if err != nil {
-  log.Fatal(err)
- }
-
- melody := []string{
-  "So", "So", "La", "So", "Do", "Si",
-  "So", "So", "La", "So", "Re", "Do",
- }
-
- err = predictor.Train(melody)
- if err != nil {
-  log.Fatal(err)
- }
-
- classID, err := predictor.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
- if err != nil {
-  log.Fatal(err)
- }
-
- fmt.Println(predictor.GetClass(classID))
- // Output: So
+predictor, err := bayes.New(bayes.MemoryStorage, 100)
+if err != nil {
+ log.Fatal(err)
 }
+
+melody := []string{
+ "So", "So", "La", "So", "Do", "Si",
+ "So", "So", "La", "So", "Re", "Do",
+}
+
+err = predictor.Train(melody)
+if err != nil {
+ log.Fatal(err)
+}
+
+classID, err := predictor.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
+if err != nil {
+ log.Fatal(err)
+}
+
+fmt.Println(predictor.GetClass(classID))
+// Output: So
 ```
+
+See the [complete melody program](_examples/melody/README.md).
 
 ### Integer Sequence
 
 The same API accepts discrete integer values. This example learns HTTP status
-history and predicts recovery after rate limiting and a temporary outage:
+history and predicts recovery after rate limiting and a temporary outage.
+Imports and the outer `main` function are omitted here:
 
 ```go
-package main
-
-import (
- "fmt"
- "log"
- "net/http"
-
- "github.com/KEINOS/go-bayes/bayes"
-)
-
-func main() {
- predictor, err := bayes.New(bayes.MemoryStorage, 101)
- if err != nil {
-  log.Fatal(err)
- }
-
- statusHistory := []int{
-  http.StatusOK,
-  http.StatusCreated,
-  http.StatusNoContent,
-  http.StatusOK,
-  http.StatusTooManyRequests,
-  http.StatusServiceUnavailable,
-  http.StatusOK,
-  http.StatusCreated,
-  http.StatusNoContent,
-  http.StatusOK,
-  http.StatusTooManyRequests,
-  http.StatusServiceUnavailable,
-  http.StatusOK,
- }
-
- err = predictor.Train(statusHistory)
- if err != nil {
-  log.Fatal(err)
- }
-
- classID, err := predictor.Predict([]int{
-  http.StatusOK,
-  http.StatusTooManyRequests,
-  http.StatusServiceUnavailable,
- })
- if err != nil {
-  log.Fatal(err)
- }
-
- fmt.Println(predictor.GetClass(classID))
- // Output: 200
+predictor, err := bayes.New(bayes.MemoryStorage, 101)
+if err != nil {
+ log.Fatal(err)
 }
+
+statusHistory := []int{
+ http.StatusOK,
+ http.StatusCreated,
+ http.StatusNoContent,
+ http.StatusOK,
+ http.StatusTooManyRequests,
+ http.StatusServiceUnavailable,
+ http.StatusOK,
+ http.StatusCreated,
+ http.StatusNoContent,
+ http.StatusOK,
+ http.StatusTooManyRequests,
+ http.StatusServiceUnavailable,
+ http.StatusOK,
+}
+
+err = predictor.Train(statusHistory)
+if err != nil {
+ log.Fatal(err)
+}
+
+classID, err := predictor.Predict([]int{
+ http.StatusOK,
+ http.StatusTooManyRequests,
+ http.StatusServiceUnavailable,
+})
+if err != nil {
+ log.Fatal(err)
+}
+
+fmt.Println(predictor.GetClass(classID))
+// Output: 200
 ```
+
+See the [complete HTTP status program](_examples/http_status/README.md).
 
 `New` creates an isolated predictor backed by in-memory storage and uses xxHash3 for context folding by default. A `Predictor` is not safe for concurrent use; callers must synchronize shared access.
 
@@ -201,10 +184,12 @@ The format does not store the selected hasher. Unmarshaling selects the default 
 
 ## Runnable Example
 
-The [Iris example](_examples/iris/README.md) trains all 150 records from the original UCI CSV data and demonstrates the complete constructor, training, prediction, and class-resolution flow. The [Wine example](_examples/wine/README.md) uses 13 ordered numeric measurements. The [Mushroom example](_examples/mushroom/README.md) uses 22 categorical values, including a missing-value token.
+Runnable programs include the [melody](_examples/melody/README.md) and [HTTP status](_examples/http_status/README.md) Quick Start examples. The [Iris example](_examples/iris/README.md) trains all 150 records from the original UCI CSV data. The [Wine example](_examples/wine/README.md) uses 13 ordered numeric measurements. The [Mushroom example](_examples/mushroom/README.md) uses 22 categorical values, including a missing-value token.
 
 ```sh
+go run ./_examples/http_status
 go run ./_examples/iris
+go run ./_examples/melody
 go run ./_examples/mushroom
 go run ./_examples/wine
 ```

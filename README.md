@@ -22,6 +22,8 @@ Install the module:
 go get github.com/KEINOS/go-bayes@latest
 ```
 
+### String Sequence
+
 Train a sequence and predict its next value:
 
 ```go
@@ -57,6 +59,63 @@ func main() {
 
  fmt.Println(predictor.GetClass(classID))
  // Output: So
+}
+```
+
+### Integer Sequence
+
+The same API accepts discrete integer values. This example learns HTTP status
+history and predicts recovery after rate limiting and a temporary outage:
+
+```go
+package main
+
+import (
+ "fmt"
+ "log"
+ "net/http"
+
+ "github.com/KEINOS/go-bayes/bayes"
+)
+
+func main() {
+ predictor, err := bayes.New(bayes.MemoryStorage, 101)
+ if err != nil {
+  log.Fatal(err)
+ }
+
+ statusHistory := []int{
+  http.StatusOK,
+  http.StatusCreated,
+  http.StatusNoContent,
+  http.StatusOK,
+  http.StatusTooManyRequests,
+  http.StatusServiceUnavailable,
+  http.StatusOK,
+  http.StatusCreated,
+  http.StatusNoContent,
+  http.StatusOK,
+  http.StatusTooManyRequests,
+  http.StatusServiceUnavailable,
+  http.StatusOK,
+ }
+
+ err = predictor.Train(statusHistory)
+ if err != nil {
+  log.Fatal(err)
+ }
+
+ classID, err := predictor.Predict([]int{
+  http.StatusOK,
+  http.StatusTooManyRequests,
+  http.StatusServiceUnavailable,
+ })
+ if err != nil {
+  log.Fatal(err)
+ }
+
+ fmt.Println(predictor.GetClass(classID))
+ // Output: 200
 }
 ```
 

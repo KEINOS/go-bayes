@@ -1,20 +1,19 @@
 # Security Policy
 
-## Supported Versions
+## Fail-Fast Policy
 
-Go versions currently supported.
+This project follows a fail-fast policy. The supported Go version is the version declared in [`go.mod`](../go.mod). Dependencies listed in `go.mod` are kept at their latest stable versions.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.18+   | :white_check_mark: |
+If a Go or dependency update exposes a problem, CI should fail as soon as possible. We fix the cause instead of hiding or delaying the failure.
 
 ## Reporting a Vulnerability
 
-Please [issue](https://github.com/KEINOS/go-bayes/issues) any vulnerability found.
+Please [open an issue](https://github.com/KEINOS/go-bayes/issues) to report a vulnerability.
 
-## Minimum measurement
+## Minimum Measures
 
-As a minimum measure, the following applies:
+The repository uses these checks:
 
-- CodeQL weekly analysis.
-- We check weekly if the package is still working properly after upgrading the modules in `gomod` to the latest version.
+- CodeQL analysis runs every week.
+- Dependabot checks Go modules for updates every week.
+- CI tests each proposed change before merge.

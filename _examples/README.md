@@ -9,18 +9,20 @@ reading all package internals.
 
 ## Available Examples
 
-- `iris/`: Uses the Iris dataset in `testdata/iris.json`.
+- [`iris/`](iris/): Trains and queries a predictor with the original
+  comma-separated Iris data distributed by the UCI Machine Learning
+  Repository.
 
 ## How To Run
 
 From repository root:
 
 ```sh
-go test ./bayes -run Example_iris -v
+go run ./_examples/iris
 ```
 
-Or run all package examples:
+Run the executable example's tests:
 
 ```sh
-go test ./bayes -run Example -v
+make test_example
 ```

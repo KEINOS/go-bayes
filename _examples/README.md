@@ -1,10 +1,6 @@
 # Examples
 
-This directory contains runnable examples for `go-bayes`.
-
-## Purpose
-
-Each example is isolated so contributors can understand behavior without reading all package internals.
+This is an index of runnable examples for `go-bayes`.
 
 ## Available Examples
 

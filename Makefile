@@ -1,6 +1,6 @@
-.PHONY: all
 EXAMPLE_DIRS := $(sort $(dir $(wildcard _examples/*/*.go)))
 
+.PHONY: all
 all: check
 
 .PHONY: check
@@ -27,7 +27,7 @@ lint:
 
 .PHONY: fuzz
 fuzz:
-	go test -fuzz=FuzzBayes -fuzztime=5s ./bayes/internal/theorem
+	@go test -fuzz=FuzzBayes -fuzztime=5s ./bayes/internal/theorem
 
 .PHONY: coverage
 coverage:

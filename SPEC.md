@@ -57,7 +57,7 @@ It passes these bytes to the same hasher that creates value IDs. xxHash3 is the 
 
 The order is part of the input. `FOLD(A, B, C)` and `FOLD(C, A, B)` are different contexts in normal use.
 
-The result is deterministic for the same input and hasher. It is not unique in the mathematical sense. Any fixed-width hash can have collisions.
+The result is deterministic for the same input and hasher. It is not unique in the mathematical sense. Any fixed-width hash can have collisions. If two different class values produce the same ID, training fails with `ErrHashCollision` before it changes the model.
 
 ## Learning
 
@@ -95,11 +95,11 @@ The predictor scores that input ID against every known class ID. It returns the 
 
 The current predictor uses exact context IDs. It does not measure similarity between token values. It also does not retry shorter contexts when the complete context has no useful match. A caller can add this backoff by calling `Predict` again with shorter suffixes.
 
-If no class has a positive score, `Predict` returns `0`. Because `0` can also be a valid class ID, callers cannot use the returned ID alone to distinguish these cases. If multiple classes have the same highest score, any one of them can be returned.
+If no class has a positive score, `Predict` returns `0`. Because `0` can also be a valid class ID, callers cannot use the returned ID alone to distinguish these cases. If multiple classes have the same highest score, the predictor returns the lowest unsigned class ID.
 
 ## Bayesian Scoring
 
-The in-memory logger counts observed `INPUT ID -> CLASS ID` pairs. During prediction, it derives frequencies from those counts and sends them to the current Bayes-based scoring helper. The predictor compares the returned scores; it does not expose a complex probability model to the storage interface.
+The model store counts observed `INPUT ID -> CLASS ID` pairs. During prediction, one statistics query returns the counts for all candidate classes. The predictor derives frequencies from those counts and sends them to the current Bayes-based scoring helper. It compares the returned scores; it does not expose a complex probability model to the storage interface.
 
 This makes Bayesian scoring one part of the implementation. FCTP describes how the input context becomes an ID and how that ID connects to a class. The model is not Naive Bayes and does not split the input into independent features.
 
@@ -115,7 +115,19 @@ CLASS ID -> original Go value
 
 `GetClass` reads this map. It returns `nil` for an unknown ID.
 
-JSON persistence stores schema version 1, the hasher name, the class map, and transition state. JSON restores numeric class values as `float64`. Built-in hashers are restored by name. A custom snapshot can be restored only into a predictor that already has a custom hasher with the same name. Missing and unknown schema versions are rejected.
+The model store saves a type tag and exact canonical payload for each class. This preserves the supported Go type, integer width, floating-point bits, and arbitrary string bytes.
+
+## Model Store and Persistence
+
+`Predictor` sends one complete `Train` call to its `ModelStore` as an atomic batch. The store keeps signed 64-bit counts and rejects any update that would overflow. `Reset` is also atomic and clears model data without changing the selected store, scope, or hasher.
+
+The built-in memory store uses Go maps. The built-in SQLite store uses a versioned schema with exact transition counts and class records. Direct SQLite models use exclusive lifetime ownership and fail immediately when the path is already owned by another cooperating process. Predictor access remains sequential; callers must synchronize shared use.
+
+`Save` writes a portable SQLite file through a temporary database and atomic path replacement. `Load` validates that file and copies it into a new memory predictor. `Open` validates it and works directly on the file, so later training commits are durable there. SQLite files include the codec version, scope ID, stable hasher name, and fixed item and context probes. These probes detect a custom hasher implementation that reused a name but changed its output.
+
+The default SQLite synchronous mode is `FULL`. `NORMAL` is an explicit performance option that can lose recent commits after a power failure. If SQLite cannot confirm whether a commit succeeded, the store is poisoned and rejects later operations. The caller must close and reopen it before continuing.
+
+SQLite support is build-tagged for cgo because it uses `github.com/mattn/go-sqlite3`. A no-cgo build keeps the public API but returns `ErrSQLiteUnavailable` for SQLite operations. JSON persistence is rejected to avoid silent loss of Go value types and storage metadata.
 
 ## Design Boundary
 

@@ -4,7 +4,7 @@ Thanks for contributing to `go-bayes`.
 
 ## Prerequisites
 
-- Go 1.22 or newer
+- The Go version declared in [`go.mod`](../go.mod)
 - `golangci-lint`
 - `markdownlint-cli2`
 
@@ -31,20 +31,22 @@ The library packages have 100% statement coverage. `make coverage` uses a 99.9% 
 ## Package Structure
 
 - `bayes`: Public constructor, predictor, persistence, and hasher selection API.
-- `bayes/nodelogger`: Public transition-statistics interface.
+- `bayes/modelstore`: Public transition and class storage contract.
 - `bayes/internal/hashers/xxHash3base`: Default xxHash3 value and context hasher.
 - `bayes/internal/hashers/blake3base`: Optional BLAKE3 value and context hasher.
-- `bayes/internal/nodeloggers/logmem`: In-memory transition statistics.
+- `bayes/internal/modelstores/mapstore`: Built-in in-memory model store.
+- `bayes/internal/modelstores/sqlitestore`: Built-in cgo SQLite model store.
 - `bayes/internal/theorem`: Current Bayes-based scoring helper.
 
 ```mermaid
 flowchart TD
     A[bayes Predictor] --> B[value and context Hasher]
-    A --> C[NodeLogger]
+    A --> C[ModelStore]
     C --> D[theorem scoring helper]
     B --> E[xxHash3 default]
     B --> F[BLAKE3 optional]
-    C --> G[in-memory storage]
+    C --> G[in-memory map store]
+    C --> H[SQLite file store]
 ```
 
 Read the [technical specification](../SPEC.md) before changing context folding, training expansion, scoring, or class recovery.

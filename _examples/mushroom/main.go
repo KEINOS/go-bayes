@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/csv"
 	"errors"
@@ -129,7 +130,7 @@ func run(output io.Writer) error {
 	}
 
 	for _, features := range queries {
-		classID, err := predictor.Predict(features[:])
+		classID, err := predictor.Predict(context.Background(), features[:])
 		if err != nil {
 			return fmt.Errorf("predict Mushroom class: %w", err)
 		}
@@ -157,7 +158,7 @@ func run(output io.Writer) error {
 }
 
 func trainPredictor(samples []mushroomSample) (*bayes.Predictor, error) {
-	predictor, err := bayes.New(bayes.MemoryStorage, datasetScopeID)
+	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
 	if err != nil {
 		return nil, fmt.Errorf("create predictor: %w", err)
 	}
@@ -171,7 +172,7 @@ func trainPredictor(samples []mushroomSample) (*bayes.Predictor, error) {
 
 		sequence = append(sequence, sample.class)
 
-		err := predictor.Train(sequence)
+		err := predictor.Train(context.Background(), sequence)
 		if err != nil {
 			return nil, fmt.Errorf("train predictor: %w", err)
 		}

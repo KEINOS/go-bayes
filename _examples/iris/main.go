@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/csv"
 	"errors"
@@ -114,7 +115,7 @@ func run(output io.Writer) error {
 	for _, measurements := range queries {
 		// Predict returns a fixed-width class ID. GetClass resolves that ID to
 		// the original species value supplied during training.
-		classID, err := predictor.Predict(measurements[:])
+		classID, err := predictor.Predict(context.Background(), measurements[:])
 		if err != nil {
 			return fmt.Errorf("predict Iris species: %w", err)
 		}
@@ -142,7 +143,7 @@ func run(output io.Writer) error {
 }
 
 func trainPredictor(samples []irisSample) (*bayes.Predictor, error) {
-	predictor, err := bayes.New(bayes.MemoryStorage, datasetScopeID)
+	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
 	if err != nil {
 		return nil, fmt.Errorf("create predictor: %w", err)
 	}
@@ -158,7 +159,7 @@ func trainPredictor(samples []irisSample) (*bayes.Predictor, error) {
 			sample.species,
 		}
 
-		err := predictor.Train(sequence)
+		err := predictor.Train(context.Background(), sequence)
 		if err != nil {
 			return nil, fmt.Errorf("train predictor: %w", err)
 		}

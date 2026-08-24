@@ -30,23 +30,25 @@ import "github.com/KEINOS/go-bayes/bayes"
 Train a sequence and predict its next value.
 
 ```go
+ctx := context.Background()
 const datasetID uint64 = 100
-predictor, err := bayes.New(bayes.MemoryStorage, datasetID)
+predictor, err := bayes.New(ctx, bayes.MemoryStorage, datasetID)
 if err != nil {
  log.Fatal(err)
 }
+defer predictor.Close()
 
 melody := []string{
  "So", "So", "La", "So", "Do", "Si",
  "So", "So", "La", "So", "Re", "Do",
 }
 
-err = predictor.Train(melody)
+err = predictor.Train(ctx, melody)
 if err != nil {
  log.Fatal(err)
 }
 
-classID, err := predictor.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
+classID, err := predictor.Predict(ctx, []string{"So", "So", "La", "So", "Do", "Si"})
 if err != nil {
  log.Fatal(err)
 }
@@ -62,11 +64,13 @@ View the [complete source](_examples/melody/main.go), or [run it online](https:/
 The same API accepts discrete integer values. This example learns HTTP status history and predicts recovery after rate limiting and a temporary outage.
 
 ```go
+ctx := context.Background()
 const datasetID uint64 = 101
-predictor, err := bayes.New(bayes.MemoryStorage, datasetID)
+predictor, err := bayes.New(ctx, bayes.MemoryStorage, datasetID)
 if err != nil {
  log.Fatal(err)
 }
+defer predictor.Close()
 
 statusHistory := []int{
  http.StatusOK,
@@ -84,12 +88,12 @@ statusHistory := []int{
  http.StatusOK,
 }
 
-err = predictor.Train(statusHistory)
+err = predictor.Train(ctx, statusHistory)
 if err != nil {
  log.Fatal(err)
 }
 
-classID, err := predictor.Predict([]int{
+classID, err := predictor.Predict(ctx, []int{
  http.StatusOK,
  http.StatusTooManyRequests,
  http.StatusServiceUnavailable,
@@ -148,7 +152,7 @@ Context order matters. The predictor matches exact folded IDs. It does not measu
 
 Each value is encoded with its Go type before it is hashed. For example, `true`, `int(1)`, `uint64(1)`, and `float64(1)` have different IDs. Integer signs and floating-point fractions are preserved.
 
-IDs are deterministic identifiers, not collision-free or reversible encodings. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
+IDs are deterministic identifiers, not collision-free or reversible encodings. Training fails with `ErrHashCollision` instead of replacing a class when two class values produce the same ID. `GetClass` depends on the predictor's class map and returns `nil` for an unknown class ID.
 
 ### Hashers
 
@@ -156,6 +160,7 @@ xxHash3 is the default algorithm for value and context IDs. Select BLAKE3 when y
 
 ```go
 predictor, err := bayes.New(
+ context.Background(),
  bayes.MemoryStorage,
  42,
  bayes.WithHasher("blake3"),
@@ -165,38 +170,48 @@ predictor, err := bayes.New(
 Use `NewPredictor` to inject a custom implementation of `bayes.Hasher`:
 
 ```go
-predictor, err := bayes.NewPredictor(bayes.PredictorConfig{
+predictor, err := bayes.NewPredictor(context.Background(), bayes.PredictorConfig{
  Storage: bayes.MemoryStorage,
  ScopeID: 42,
  Hasher:  customHasher,
 })
 ```
 
-The selected hasher creates every value ID and context ID. It is fixed when the predictor is created. A custom hasher must return a stable, non-empty name for JSON persistence.
+The selected hasher creates every value ID and context ID. It is fixed when the predictor is created. A custom hasher must return a stable, non-empty name for model-file compatibility.
 
-### Persistence
+### Model Storage
 
-`Predictor` implements `encoding/json` marshaling and unmarshaling for `MemoryStorage`:
+Memory storage is the simplest choice for a short-lived predictor. Save its complete state as a portable SQLite model file:
 
 ```go
-payload, err := json.Marshal(predictor)
-if err != nil {
- log.Fatal(err)
-}
-
-var restored bayes.Predictor
-
-err = json.Unmarshal(payload, &restored)
-if err != nil {
- log.Fatal(err)
-}
+err := predictor.Save(ctx, "model.db")
 ```
 
-The JSON format stores transition state, scope, storage type, and the class map. JSON does not preserve the exact Go type of numeric class values. For example, an `int` class value is restored as `float64`.
+`Load` copies a saved model into memory. `Open` operates directly on the model file and keeps new training data there:
 
-The format uses schema version 1 and stores the selected hasher name. Built-in hashers are restored automatically. To restore a custom-hasher snapshot, create a predictor with a custom hasher that has the same name, then unmarshal into that predictor. Snapshots from `v0.0.4` or earlier do not have a schema version and are rejected.
+```go
+inMemory, err := bayes.Load(ctx, "model.db")
+onDisk, err := bayes.Open(ctx, "model.db")
+```
 
-`Reset` clears learned transitions and classes. `SetStorage` selects the backend used by the next `Reset`. Only `MemoryStorage` is currently implemented.
+Call `Close` for every predictor. A directly opened model has exclusive lifetime ownership, so another cooperating process cannot open or replace the same path until it is closed.
+
+Create a new file-backed model with `SQLiteStorage`:
+
+```go
+predictor, err := bayes.New(
+ ctx,
+ bayes.SQLiteStorage,
+ datasetID,
+ bayes.WithSQLitePath("model.db"),
+)
+```
+
+SQLite support uses `github.com/mattn/go-sqlite3` and requires cgo. Builds with `CGO_ENABLED=0` can use memory storage, but `Save`, `Load`, `Open`, and `SQLiteStorage` return `ErrSQLiteUnavailable`.
+
+Model files preserve exact supported Go value types, transition counts, scope, codec version, and hasher identity. A custom-hasher model can be loaded only when the same compatible `Hasher` is supplied. JSON model persistence is no longer supported.
+
+`Train` and `Reset` are atomic store operations. `Reset` clears learned transitions and classes but keeps the current storage backend, scope, and hasher.
 
 ## Technical Details
 

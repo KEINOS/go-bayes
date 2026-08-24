@@ -8,89 +8,134 @@
 package bayes
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
-	"github.com/KEINOS/go-bayes/bayes/internal/nodeloggers/logmem"
-	"github.com/KEINOS/go-bayes/bayes/nodelogger"
+	"github.com/KEINOS/go-bayes/bayes/internal/modelstores/mapstore"
+	"github.com/KEINOS/go-bayes/bayes/modelstore"
 )
 
 var (
-	errNewOptionNil             = errors.New("new option must not be nil")
-	errUnknownStorageEngineType = errors.New("unknown storage engine type")
+	// ErrJSONPersistenceUnsupported tells callers to use Save, Load, or Open.
+	ErrJSONPersistenceUnsupported = errors.New("JSON model persistence is unsupported; use Save, Load, or Open")
+	// ErrHashCollision means one class ID was produced for two different values.
+	ErrHashCollision = modelstore.ErrClassConflict
+	// ErrPredictorClosed means that an I/O method was called after Close.
+	ErrPredictorClosed = errors.New("predictor is closed")
+	// ErrSQLiteUnavailable means that this build does not include cgo SQLite support.
+	ErrSQLiteUnavailable = errors.New("SQLite model storage is unavailable in this build")
+	errNewOptionNil      = errors.New("new option must not be nil")
+	errStorageConfig     = errors.New("invalid storage configuration")
 )
 
-// ----------------------------------------------------------------------------
-//  Type: NodeLogger
-// ----------------------------------------------------------------------------
+// ModelStore keeps exact model counts and reversible class records.
+type ModelStore = modelstore.ModelStore
 
-// NodeLogger is the node logging interface used by Predictor.
-type NodeLogger = nodelogger.NodeLogger
+// SQLiteSynchronous controls SQLite's durability and write latency.
+type SQLiteSynchronous int
 
-// ----------------------------------------------------------------------------
-//  Type: Storage
-// ----------------------------------------------------------------------------
+const (
+	// SQLiteSynchronousFull syncs each committed transaction for durability.
+	SQLiteSynchronousFull SQLiteSynchronous = iota
+	// SQLiteSynchronousNormal reduces sync work and can lose recent commits after power loss.
+	SQLiteSynchronousNormal
+)
 
-// Storage is the type of storage to log the accesses.
+// Storage selects a built-in model store.
 type Storage int
 
 const (
-	// UnknownStorage represents the unknown storage.
+	// UnknownStorage is used when a caller injects a ModelStore.
 	UnknownStorage Storage = iota
-	// MemoryStorage represents the in-memory storage.
+	// MemoryStorage keeps the complete model in Go maps.
 	MemoryStorage
+	// SQLiteStorage keeps the model in a SQLite file.
+	SQLiteStorage
 )
 
-// Type returns the type name of the storage.
+// New returns an isolated Predictor using the requested storage and scope.
+// With no Hasher option, it uses xxHash3 for value and context IDs.
+func New(ctx context.Context, engine Storage, scopeID uint64, options ...Option) (*Predictor, error) {
+	config := PredictorConfig{
+		Storage:           engine,
+		ScopeID:           scopeID,
+		Hasher:            nil,
+		ModelStore:        nil,
+		SQLitePath:        "",
+		SQLiteSynchronous: SQLiteSynchronousFull,
+		SQLiteCacheKiB:    0,
+	}
+
+	err := applyOptions(&config, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPredictor(ctx, config)
+}
+
+// Type returns a short storage name.
 func (s Storage) Type() string {
 	switch s {
 	case MemoryStorage:
 		return "in-memory"
+	case SQLiteStorage:
+		return "sqlite"
 	case UnknownStorage:
 	}
 
 	return "unknown"
 }
 
-// ----------------------------------------------------------------------------
-//  Constructor
-// ----------------------------------------------------------------------------
-
-// New returns an isolated Predictor using the requested storage and scope. With
-// no options, it uses xxHash3 for value and context IDs.
-func New(engine Storage, scopeID uint64, options ...Option) (*Predictor, error) {
-	config := PredictorConfig{
-		Storage: engine,
-		ScopeID: scopeID,
-		Hasher:  nil,
-	}
-
+func applyOptions(config *PredictorConfig, options []Option) error {
 	for _, option := range options {
 		if option == nil {
-			return nil, errNewOptionNil
+			return errNewOptionNil
 		}
 
-		err := option(&config)
+		err := option(config)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return NewPredictor(config)
+	return nil
 }
 
-// newNodeLogger creates a new NodeLogger instance based on the storage engine type.
+// newModelStore creates a configured built-in store or accepts an injected one.
 //
-//nolint:ireturn // NodeLogger is the internal storage/logger abstraction.
-func newNodeLogger(engine Storage, scopeID uint64) (NodeLogger, error) {
-	// Currently only MemoryStorage is supported. So disable switch statement
-	//
-	// switch engine {
-	// case MemoryStorage:
-	// 	return logmem.New(scopeID), nil
-	// }
-	if engine == MemoryStorage {
-		return logmem.New(scopeID), nil
+//nolint:cyclop,ireturn // constructor validation is explicit; the interface is the extension boundary.
+func newModelStore(ctx context.Context, config PredictorConfig) (modelstore.ModelStore, error) {
+	err := ctx.Err()
+	if err != nil {
+		return nil, fmt.Errorf("model-store construction canceled: %w", err)
 	}
 
-	return nil, errUnknownStorageEngineType
+	if config.ModelStore != nil {
+		if config.Storage != UnknownStorage || config.SQLitePath != "" {
+			return nil, fmt.Errorf("%w: injected ModelStore requires UnknownStorage", errStorageConfig)
+		}
+
+		if config.ModelStore.ScopeID() != config.ScopeID {
+			return nil, fmt.Errorf("%w: ModelStore scope does not match config", errStorageConfig)
+		}
+
+		return config.ModelStore, nil
+	}
+
+	switch config.Storage {
+	case MemoryStorage:
+		if config.SQLitePath != "" || config.SQLiteSynchronous != SQLiteSynchronousFull || config.SQLiteCacheKiB != 0 {
+			return nil, fmt.Errorf("%w: memory storage rejects SQLite options", errStorageConfig)
+		}
+
+		return mapstore.New(config.ScopeID), nil
+	case SQLiteStorage:
+		return newSQLiteStore(ctx, config)
+	case UnknownStorage:
+		return nil, fmt.Errorf("%w: no ModelStore was supplied", errStorageConfig)
+	default:
+		return nil, fmt.Errorf("%w: unknown storage %d", errStorageConfig, config.Storage)
+	}
 }

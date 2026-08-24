@@ -7,8 +7,10 @@ linters:
   disable:
     # Deprecated linters
     - wsl
+    - wsl_v5
     - gomodguard
     - exhaustruct
+    - exhaustruct_v5
     # Disabled by project policy
     - depguard
     - testpackage

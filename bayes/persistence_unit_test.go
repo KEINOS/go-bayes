@@ -25,6 +25,7 @@ func TestSQLite_SavePreservesPermissionsAndLocksActiveModels(t *testing.T) {
 	directory := t.TempDir()
 	modelPath := filepath.Join(directory, "model.db")
 	copyPath := filepath.Join(directory, "copy.db")
+	preservesPermissions := filesystemPreservesPermissions(t, directory)
 
 	memory, err := New(ctx, MemoryStorage, 77, WithHasher("blake3"))
 	require.NoError(t, err)
@@ -33,7 +34,9 @@ func TestSQLite_SavePreservesPermissionsAndLocksActiveModels(t *testing.T) {
 
 	info, err := os.Stat(modelPath)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	if preservesPermissions {
+		require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 	require.NoFileExists(t, modelPath+"-wal")
 	require.NoFileExists(t, modelPath+"-shm")
 
@@ -69,7 +72,9 @@ func TestSQLite_SavePreservesPermissionsAndLocksActiveModels(t *testing.T) {
 	require.NoError(t, memory.Save(ctx, copyPath))
 	info, err = os.Stat(copyPath)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o640), info.Mode().Perm())
+	if preservesPermissions {
+		require.Equal(t, os.FileMode(0o640), info.Mode().Perm())
+	}
 }
 
 func TestSQLite_NewAndResetAreDurable(t *testing.T) {
@@ -275,6 +280,25 @@ func assertPrediction(t *testing.T, predictor *Predictor, input any, want any) {
 	id, err := predictor.Predict(context.Background(), input)
 	require.NoError(t, err)
 	require.Equal(t, want, predictor.GetClass(id))
+}
+
+func filesystemPreservesPermissions(t *testing.T, directory string) bool {
+	t.Helper()
+
+	path := filepath.Join(directory, "permission-probe")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+	require.NoError(t, os.Chmod(path, 0o640)) // #nosec G302 -- permission behavior is under test.
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+
+	if info.Mode().Perm() != os.FileMode(0o640) {
+		t.Logf("filesystem does not preserve Unix permission bits: got %04o", info.Mode().Perm())
+
+		return false
+	}
+
+	return true
 }
 
 type stableTestHasher struct {

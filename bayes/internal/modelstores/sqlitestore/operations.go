@@ -60,7 +60,7 @@ func (s *Store) applyStream(
 		return err
 	}
 
-	tx, err := s.conn.BeginTx(ctx, nil)
+	tx, err := s.conn.BeginTx(context.WithoutCancel(ctx), nil)
 	if err != nil {
 		return err
 	}

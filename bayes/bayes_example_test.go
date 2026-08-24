@@ -1,6 +1,7 @@
 package bayes_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,17 +21,17 @@ func Example() {
 
 	scopeID := uint64(100)
 
-	foo, err := bayes.New(bayes.MemoryStorage, scopeID)
+	foo, err := bayes.New(context.Background(), bayes.MemoryStorage, scopeID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = foo.Train(score)
+	err = foo.Train(context.Background(), score)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	nextNoteID, err := foo.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
+	nextNoteID, err := foo.Predict(context.Background(), []string{"So", "So", "La", "So", "Do", "Si"})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func Example_iris() {
 	// Create an independent predictor with an application-defined scope ID.
 	scopeID := uint64(4)
 
-	predictor, err := bayes.New(bayes.MemoryStorage, scopeID)
+	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, scopeID)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -94,7 +95,7 @@ func Example_iris() {
 		// Sepal length, sepal width, petal length, petal width, and target class.
 		drill := []float64{row[0], row[1], row[2], row[3], iris.Target[i]}
 
-		err := predictor.Train(drill)
+		err := predictor.Train(context.Background(), drill)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -102,7 +103,7 @@ func Example_iris() {
 
 	// Predict the class for a new data point.
 	// [0] = sepal length, [1] = sepal width, [2] = petal length, [3] = petal width.
-	predictedID, err := predictor.Predict([]float64{5.1, 3.5, 1.4, 0.2})
+	predictedID, err := predictor.Predict(context.Background(), []float64{5.1, 3.5, 1.4, 0.2})
 	if err != nil {
 		log.Panic(err)
 	}
@@ -133,7 +134,7 @@ func ExampleNew() {
 	scopeID := uint64(100)
 
 	// Create a predictor with in-memory storage.
-	predictor, err := bayes.New(bayes.MemoryStorage, scopeID)
+	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, scopeID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -145,6 +146,7 @@ func ExampleNew() {
 
 func ExampleWithHasher() {
 	predictor, err := bayes.New(
+		context.Background(),
 		bayes.MemoryStorage,
 		100,
 		bayes.WithHasher("blake3"),

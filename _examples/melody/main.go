@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -20,7 +21,7 @@ func main() {
 }
 
 func run(output io.Writer) error {
-	predictor, err := bayes.New(bayes.MemoryStorage, datasetScopeID)
+	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
 	if err != nil {
 		return fmt.Errorf("create predictor: %w", err)
 	}
@@ -30,12 +31,12 @@ func run(output io.Writer) error {
 		"So", "So", "La", "So", "Re", "Do",
 	}
 
-	err = predictor.Train(melody)
+	err = predictor.Train(context.Background(), melody)
 	if err != nil {
 		return fmt.Errorf("train melody: %w", err)
 	}
 
-	classID, err := predictor.Predict([]string{"So", "So", "La", "So", "Do", "Si"})
+	classID, err := predictor.Predict(context.Background(), []string{"So", "So", "La", "So", "Do", "Si"})
 	if err != nil {
 		return fmt.Errorf("predict next note: %w", err)
 	}

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -21,7 +22,7 @@ func main() {
 }
 
 func run(output io.Writer) error {
-	predictor, err := bayes.New(bayes.MemoryStorage, datasetScopeID)
+	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
 	if err != nil {
 		return fmt.Errorf("create predictor: %w", err)
 	}
@@ -42,16 +43,17 @@ func run(output io.Writer) error {
 		http.StatusOK,
 	}
 
-	err = predictor.Train(statusHistory)
+	err = predictor.Train(context.Background(), statusHistory)
 	if err != nil {
 		return fmt.Errorf("train HTTP status history: %w", err)
 	}
 
-	classID, err := predictor.Predict([]int{
+	classID, err := predictor.Predict(context.Background(), []int{
 		http.StatusOK,
 		http.StatusTooManyRequests,
 		http.StatusServiceUnavailable,
 	})
+
 	if err != nil {
 		return fmt.Errorf("predict next HTTP status: %w", err)
 	}

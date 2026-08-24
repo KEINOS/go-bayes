@@ -26,6 +26,58 @@ type Hasher interface {
 // Option configures a Predictor created by New.
 type Option func(*PredictorConfig) error
 
+// WithModelStore injects a custom store. Use UnknownStorage with this option.
+func WithModelStore(store ModelStore) Option {
+	return func(config *PredictorConfig) error {
+		if store == nil {
+			return fmt.Errorf("%w: ModelStore must not be nil", errStorageConfig)
+		}
+
+		config.ModelStore = store
+
+		return nil
+	}
+}
+
+// WithSQLiteCacheKiB sets SQLite's suggested page-cache size in KiB.
+func WithSQLiteCacheKiB(size int) Option {
+	return func(config *PredictorConfig) error {
+		if size <= 0 {
+			return fmt.Errorf("%w: SQLite cache size must be positive", errStorageConfig)
+		}
+
+		config.SQLiteCacheKiB = size
+
+		return nil
+	}
+}
+
+// WithSQLitePath sets the model path for New with SQLiteStorage.
+func WithSQLitePath(path string) Option {
+	return func(config *PredictorConfig) error {
+		if path == "" {
+			return fmt.Errorf("%w: SQLite path must not be empty", errStorageConfig)
+		}
+
+		config.SQLitePath = path
+
+		return nil
+	}
+}
+
+// WithSQLiteSynchronous selects SQLite FULL or NORMAL synchronous mode.
+func WithSQLiteSynchronous(mode SQLiteSynchronous) Option {
+	return func(config *PredictorConfig) error {
+		if mode != SQLiteSynchronousFull && mode != SQLiteSynchronousNormal {
+			return fmt.Errorf("%w: unknown SQLite synchronous mode %d", errStorageConfig, mode)
+		}
+
+		config.SQLiteSynchronous = mode
+
+		return nil
+	}
+}
+
 // NewBlake3Hasher returns the BLAKE3 value and context hasher.
 //
 //nolint:ireturn // returning the public extension interface hides internal implementations.

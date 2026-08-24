@@ -4,6 +4,7 @@
 package sqlitestore
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -174,7 +175,10 @@ func (s *Store) Close() error {
 
 	var closeErr error
 	if s.conn != nil {
-		closeErr = errors.Join(closeErr, s.conn.Close())
+		err := s.conn.Close()
+		if !errors.Is(err, sql.ErrConnDone) {
+			closeErr = errors.Join(closeErr, err)
+		}
 	}
 
 	if s.db != nil {
@@ -504,17 +508,6 @@ func idFromSQL(id int64) uint64 {
 	return uint64(id) // #nosec G115 -- restore the original unsigned bits.
 }
 
-func compareID(left, right uint64) int {
-	switch {
-	case left < right:
-		return -1
-	case left > right:
-		return 1
-	default:
-		return 0
-	}
-}
-
 func sortedClasses(classes []modelstore.Class) []modelstore.Class {
 	result := make([]modelstore.Class, len(classes))
 	for index, class := range classes {
@@ -523,7 +516,7 @@ func sortedClasses(classes []modelstore.Class) []modelstore.Class {
 	}
 
 	slices.SortFunc(result, func(left, right modelstore.Class) int {
-		return compareID(left.ID, right.ID)
+		return cmp.Compare(left.ID, right.ID)
 	})
 
 	return result

@@ -224,6 +224,12 @@ func TestSQLite_rejectsInvalidFilesAndOptions(t *testing.T) {
 
 	_, err = Load(ctx, validPath)
 	require.ErrorIs(t, err, ErrInvalidModel)
+
+	failedOption := func(*PredictorConfig) error { return errTestOptionFailed }
+	_, err = Load(ctx, validPath, failedOption)
+	require.ErrorIs(t, err, errTestOptionFailed)
+	_, err = Open(ctx, validPath, failedOption)
+	require.ErrorIs(t, err, errTestOptionFailed)
 }
 
 func TestSQLite_SaveErrors(t *testing.T) {
@@ -241,6 +247,26 @@ func TestSQLite_SaveErrors(t *testing.T) {
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 	require.ErrorIs(t, predictor.Save(canceled, filepath.Join(t.TempDir(), "model.db")), context.Canceled)
+
+	classesFailure := &Predictor{
+		hasher: NewDefaultHasher(),
+		store:  &fakeStore{scope: 1, classesErr: errTestClassesFailed},
+	}
+	require.ErrorIs(
+		t,
+		saveModel(ctx, classesFailure, filepath.Join(t.TempDir(), "classes.db")),
+		errTestClassesFailed,
+	)
+
+	exportFailure := &Predictor{
+		hasher: NewDefaultHasher(),
+		store:  &fakeStore{scope: 1, exportErr: errTestExportFailed},
+	}
+	require.ErrorIs(
+		t,
+		saveModel(ctx, exportFailure, filepath.Join(t.TempDir(), "export.db")),
+		errTestExportFailed,
+	)
 }
 
 func assertPrediction(t *testing.T, predictor *Predictor, input any, want any) {

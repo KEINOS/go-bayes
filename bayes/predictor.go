@@ -2,6 +2,7 @@ package bayes
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -307,7 +308,7 @@ func (p *Predictor) Train(ctx context.Context, items any) error {
 	}
 
 	slices.SortFunc(classes, func(left, right modelstore.Class) int {
-		return compareUint64(left.ID, right.ID)
+		return cmp.Compare(left.ID, right.ID)
 	})
 
 	batch := modelstore.TrainingBatch{
@@ -389,15 +390,4 @@ func cloneStoredClass(class modelstore.Class) modelstore.Class {
 
 func sameStoredClass(left, right modelstore.Class) bool {
 	return left.TypeTag == right.TypeTag && bytes.Equal(left.Payload, right.Payload)
-}
-
-func compareUint64(left, right uint64) int {
-	switch {
-	case left < right:
-		return -1
-	case left > right:
-		return 1
-	default:
-		return 0
-	}
 }

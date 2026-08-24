@@ -15,7 +15,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var errTestApplyFailed = errors.New("apply failed")
+var (
+	errTestApplyFailed   = errors.New("apply failed")
+	errTestClassesFailed = errors.New("classes failed")
+	errTestCloseFailed   = errors.New("close failed")
+	errTestExportFailed  = errors.New("export failed")
+	errTestOptionFailed  = errors.New("option failed")
+	errTestResetFailed   = errors.New("reset failed")
+	errTestStatsFailed   = errors.New("stats failed")
+)
 
 type fakeStore struct {
 	scope      uint64
@@ -193,6 +201,54 @@ func TestPredictor_trainFailureDoesNotChangeClassCache(t *testing.T) {
 	}
 
 	require.Len(t, deltas, 1)
+
+	yielded := 0
+	store.lastBatch.Transitions()(func(modelstore.TransitionDelta) bool {
+		yielded++
+
+		return false
+	})
+	require.Equal(t, 1, yielded, "the iterator must stop when its consumer stops")
+}
+
+func TestPredictor_propagatesStoreErrors(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	classesStore := &fakeStore{scope: 1, classesErr: errTestClassesFailed}
+	_, err := NewPredictor(ctx, PredictorConfig{
+		Storage: UnknownStorage, ScopeID: 1, ModelStore: classesStore,
+	})
+	require.ErrorIs(t, err, errTestClassesFailed)
+	require.False(t, classesStore.closed, "a rejected injected store remains caller-owned")
+
+	invalidClassStore := &fakeStore{
+		scope:   1,
+		classes: []modelstore.Class{{TypeTag: 255}},
+	}
+	_, err = NewPredictor(ctx, PredictorConfig{
+		Storage: UnknownStorage, ScopeID: 1, ModelStore: invalidClassStore,
+	})
+	require.ErrorIs(t, err, errInvalidStoredClass)
+	require.False(t, invalidClassStore.closed, "a rejected injected store remains caller-owned")
+
+	store := &fakeStore{
+		scope:    1,
+		statsErr: errTestStatsFailed,
+		resetErr: errTestResetFailed,
+		closeErr: errTestCloseFailed,
+	}
+	predictor, err := NewPredictor(ctx, PredictorConfig{
+		Storage: UnknownStorage, ScopeID: 1, ModelStore: store,
+	})
+	require.NoError(t, err)
+
+	_, err = predictor.Predict(ctx, []string{"A"})
+	require.ErrorIs(t, err, errTestStatsFailed)
+	require.ErrorIs(t, predictor.Reset(ctx), errTestResetFailed)
+	require.ErrorIs(t, predictor.Close(), errTestCloseFailed)
+	require.NoError(t, predictor.Close(), "Close remains idempotent after a store error")
 }
 
 func TestPredictor_errorPaths(t *testing.T) {
@@ -210,6 +266,8 @@ func TestPredictor_errorPaths(t *testing.T) {
 
 	require.Error(t, predictor.Train(ctx, []any{make(chan int)}))
 	_, err = predictor.HashTrans(make(chan int))
+	require.ErrorIs(t, err, errUnsupportedValueType)
+	_, err = predictor.Predict(ctx, []any{make(chan int)})
 	require.ErrorIs(t, err, errUnsupportedValueType)
 
 	canceled, cancel := context.WithCancel(ctx)
@@ -267,15 +325,19 @@ func TestConstructorsAndOptions(t *testing.T) {
 
 	ctx := context.Background()
 
-	require.Equal(t, "unknown", UnknownStorage.Type())
-	require.Equal(t, "in-memory", MemoryStorage.Type())
-	require.Equal(t, "sqlite", SQLiteStorage.Type())
-	require.Equal(t, "unknown", Storage(99).Type())
-
 	_, err := New(ctx, MemoryStorage, 1, nil)
 	require.ErrorIs(t, err, errNewOptionNil)
+	failedOption := func(*PredictorConfig) error { return errTestOptionFailed }
+	_, err = New(ctx, MemoryStorage, 1, failedOption)
+	require.ErrorIs(t, err, errTestOptionFailed)
 	_, err = New(ctx, MemoryStorage, 1, WithHasher("unknown"))
 	require.ErrorIs(t, err, errUnknownHasher)
+	selected, err := New(ctx, MemoryStorage, 1, WithHasher("xxhash3"))
+	require.NoError(t, err)
+	require.Equal(t, "xxhash3", selected.hasher.Name())
+	require.NoError(t, selected.Close())
+	_, err = New(ctx, MemoryStorage, 1, WithSQLitePath(""))
+	require.ErrorIs(t, err, errStorageConfig)
 	_, err = New(ctx, MemoryStorage, 1, WithSQLitePath("model.db"))
 	require.ErrorIs(t, err, errStorageConfig)
 	_, err = New(ctx, MemoryStorage, 1, WithSQLiteCacheKiB(0))
@@ -289,11 +351,6 @@ func TestConstructorsAndOptions(t *testing.T) {
 	_, err = New(ctx, UnknownStorage, 1, WithModelStore(nil))
 	require.ErrorIs(t, err, errStorageConfig)
 
-	store := mapstore.New(2)
-	_, err = New(ctx, UnknownStorage, 1, WithModelStore(store))
-	require.ErrorIs(t, err, errStorageConfig)
-	require.NoError(t, store.Reset(ctx), "constructor failure must not take ownership")
-
 	emptyName := stubHasher{name: ""}
 	_, err = NewPredictor(ctx, PredictorConfig{Storage: MemoryStorage, Hasher: emptyName})
 	require.ErrorIs(t, err, errPredictorHasherNameEmpty)
@@ -303,6 +360,33 @@ func TestConstructorsAndOptions(t *testing.T) {
 
 	_, err = New(canceled, MemoryStorage, 1)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestStorageTypes(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, "unknown", UnknownStorage.Type())
+	require.Equal(t, "in-memory", MemoryStorage.Type())
+	require.Equal(t, "sqlite", SQLiteStorage.Type())
+	require.Equal(t, "unknown", Storage(99).Type())
+}
+
+func TestConstructorRejectsInvalidInjectedStoreConfig(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := mapstore.New(2)
+	_, err := New(ctx, UnknownStorage, 1, WithModelStore(store))
+	require.ErrorIs(t, err, errStorageConfig)
+	require.NoError(t, store.Reset(ctx), "constructor failure must not take ownership")
+
+	injected := &fakeStore{scope: 1}
+	_, err = New(ctx, MemoryStorage, 1, WithModelStore(injected))
+	require.ErrorIs(t, err, errStorageConfig)
+	_, err = NewPredictor(ctx, PredictorConfig{
+		Storage: UnknownStorage, ScopeID: 1, ModelStore: injected, SQLitePath: "model.db",
+	})
+	require.ErrorIs(t, err, errStorageConfig)
 }
 
 func TestClassDecoderRejectsMalformedRecords(t *testing.T) {
@@ -315,8 +399,8 @@ func TestClassDecoderRejectsMalformedRecords(t *testing.T) {
 		{TypeTag: tagBool, Payload: nil},
 		{TypeTag: tagBool, Payload: []byte{2}},
 		{TypeTag: tagInt, Payload: []byte{1}},
-		{TypeTag: tagInt16, Payload: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x80, 0x00}},
-		{TypeTag: tagInt32, Payload: []byte{0xff, 0xff, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00}},
+		{TypeTag: tagInt16, Payload: []byte{0, 0, 0, 0, 0, 0, 0x80, 0}},
+		{TypeTag: tagInt32, Payload: []byte{0, 0, 0, 0, 0x80, 0, 0, 0}},
 		{TypeTag: tagUint16, Payload: []byte{0, 0, 0, 0, 0, 1, 0, 0}},
 		{TypeTag: tagUint32, Payload: []byte{0, 0, 0, 1, 0, 0, 0, 0}},
 		{TypeTag: tagFloat32, Payload: []byte{1}},
@@ -331,6 +415,9 @@ func TestClassDecoderRejectsMalformedRecords(t *testing.T) {
 	require.NoError(t, err)
 	_, err = predictor.decodeClass(valid)
 	require.ErrorIs(t, err, errInvalidStoredClass, "ID mismatch must fail")
+
+	_, err = predictor.classRecord(0, make(chan int))
+	require.ErrorIs(t, err, errUnsupportedValueType)
 }
 
 type stubHasher struct{ name string }

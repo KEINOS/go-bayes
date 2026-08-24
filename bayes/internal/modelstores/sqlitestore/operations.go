@@ -3,6 +3,7 @@
 package sqlitestore
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
@@ -249,7 +250,7 @@ func (s *Store) Classes(ctx context.Context) ([]modelstore.Class, error) {
 	}
 
 	slices.SortFunc(classes, func(left, right modelstore.Class) int {
-		return compareID(left.ID, right.ID)
+		return cmp.Compare(left.ID, right.ID)
 	})
 
 	return classes, nil
@@ -293,11 +294,11 @@ func (s *Store) ExportTransitions(ctx context.Context, sink func(modelstore.Tran
 	}
 
 	slices.SortFunc(records, func(left, right modelstore.TransitionCount) int {
-		if result := compareID(left.FromID, right.FromID); result != 0 {
+		if result := cmp.Compare(left.FromID, right.FromID); result != 0 {
 			return result
 		}
 
-		return compareID(left.ToID, right.ToID)
+		return cmp.Compare(left.ToID, right.ToID)
 	})
 
 	for _, record := range records {
@@ -412,7 +413,7 @@ WHERE m.singleton = 1`, idToSQL(fromID))
 	}
 
 	slices.SortFunc(stats.Candidates, func(left, right modelstore.CandidateStats) int {
-		return compareID(left.ClassID, right.ClassID)
+		return cmp.Compare(left.ClassID, right.ClassID)
 	})
 
 	return stats, nil

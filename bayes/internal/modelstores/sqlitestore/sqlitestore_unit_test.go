@@ -466,14 +466,22 @@ func TestPathLockAndCanonicalPath(t *testing.T) {
 	_, err = AcquirePathLock(canceled, path)
 	require.ErrorIs(t, err, context.Canceled)
 
-	readOnlyDirectory := filepath.Join(directory, "read-only")
-	require.NoError(t, os.Mkdir(readOnlyDirectory, 0o500))
-	t.Cleanup(func() {
-		// The owner needs directory access so TempDir can remove it.
-		require.NoError(t, os.Chmod(readOnlyDirectory, 0o700)) //nolint:gosec
+	t.Run("read-only directory", func(t *testing.T) {
+		t.Parallel()
+
+		readOnlyDirectory := filepath.Join(directory, "read-only")
+		require.NoError(t, os.Mkdir(readOnlyDirectory, 0o500))
+		t.Cleanup(func() {
+			// The owner needs directory access so TempDir can remove it.
+			require.NoError(t, os.Chmod(readOnlyDirectory, 0o700)) //nolint:gosec
+		})
+
+		blockedLock, err := AcquirePathLock(ctx, filepath.Join(readOnlyDirectory, "blocked.db"))
+		if err == nil {
+			require.NoError(t, blockedLock.Close())
+			t.Skip("filesystem does not enforce read-only directory permissions")
+		}
 	})
-	_, err = AcquirePathLock(ctx, filepath.Join(readOnlyDirectory, "blocked.db"))
-	require.Error(t, err)
 
 	store, err := Create(ctx, path, testMetadata(), OpenConfig{})
 	require.NoError(t, err)

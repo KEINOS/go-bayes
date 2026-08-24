@@ -9,13 +9,17 @@ permissions:
   contents: read
 jobs:
   unit-test:
-    name: unit-test
-    runs-on: ubuntu-latest
+    name: unit-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.26.x'
+          go-version: '1.x'
           check-latest: true
       - name: unit-test
         run: go test -race -v ./... ./_examples/http_status ./_examples/iris ./_examples/melody ./_examples/mushroom ./_examples/wine

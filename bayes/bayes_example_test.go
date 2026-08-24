@@ -148,7 +148,7 @@ func ExamplePredictor_foldedContexts() {
 	ctx := context.Background()
 	predictor, err := bayes.New(ctx, bayes.MemoryStorage, 100)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	defer func() {

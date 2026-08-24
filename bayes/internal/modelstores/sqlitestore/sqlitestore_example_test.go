@@ -19,7 +19,7 @@ func ExampleStore() {
 	ctx := context.Background()
 	directory, err := os.MkdirTemp("", "go-bayes-sqlite-example-")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	defer func() {

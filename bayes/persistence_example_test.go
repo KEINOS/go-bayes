@@ -16,7 +16,7 @@ func ExamplePredictor_Save() {
 	ctx := context.Background()
 	directory, err := os.MkdirTemp("", "go-bayes-save-example-")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	defer func() {
@@ -74,7 +74,7 @@ func ExampleOpen() {
 	ctx := context.Background()
 	directory, err := os.MkdirTemp("", "go-bayes-open-example-")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	defer func() {

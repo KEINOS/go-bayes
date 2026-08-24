@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:funlen // one lifecycle test keeps persistence transitions in order.
-func TestSQLite_SaveLoadOpenLifecycle(t *testing.T) {
+//nolint:funlen // permission, locking, and replacement checks share one model.
+func TestSQLite_SavePreservesPermissionsAndLocksActiveModels(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()

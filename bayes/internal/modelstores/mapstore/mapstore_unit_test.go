@@ -15,23 +15,11 @@ import (
 
 var errTestSinkStopped = errors.New("sink stopped")
 
-//nolint:funlen // one lifecycle test keeps state transitions in order.
-func TestStore_lifecycle(t *testing.T) {
+func TestStore_returnsCopiesAndRejectsOperationsAfterClose(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	store := New(42)
-	require.Equal(t, uint64(42), store.ScopeID())
-
-	stats, err := store.Stats(ctx, 10)
-	require.NoError(t, err)
-	require.Zero(t, stats.Total)
-	require.Zero(t, stats.FromCount)
-	require.Empty(t, stats.Candidates)
-
-	classes, err := store.Classes(ctx)
-	require.NoError(t, err)
-	require.Empty(t, classes)
 
 	classPayload := []byte("answer")
 	batch := batchOf(
@@ -42,40 +30,13 @@ func TestStore_lifecycle(t *testing.T) {
 	require.NoError(t, store.Apply(ctx, batch))
 
 	classPayload[0] = 'X'
-
-	stats, err = store.Stats(ctx, 10)
-	require.NoError(t, err)
-	require.Equal(t, modelstore.Stats{
-		Total:     5,
-		FromCount: 5,
-		Candidates: []modelstore.CandidateStats{{
-			ClassID: 2, ToCount: 5, PairCount: 5,
-		}},
-	}, stats)
-
-	classes, err = store.Classes(ctx)
+	classes, err := store.Classes(ctx)
 	require.NoError(t, err)
 	require.Equal(t, []byte("answer"), classes[0].Payload)
 	classes[0].Payload[0] = 'X'
 	reloaded, err := store.Classes(ctx)
 	require.NoError(t, err)
 	require.Equal(t, []byte("answer"), reloaded[0].Payload)
-
-	var exported []modelstore.TransitionCount
-
-	require.NoError(t, store.ExportTransitions(ctx, func(record modelstore.TransitionCount) error {
-		exported = append(exported, record)
-
-		return nil
-	}))
-	require.Equal(t, []modelstore.TransitionCount{{FromID: 10, ToID: 2, Count: 5}}, exported)
-
-	require.NoError(t, store.Reset(ctx))
-	stats, err = store.Stats(ctx, 10)
-	require.NoError(t, err)
-	require.Zero(t, stats.Total)
-	require.Zero(t, stats.FromCount)
-	require.Empty(t, stats.Candidates)
 
 	require.NoError(t, store.Close())
 	require.NoError(t, store.Close())

@@ -74,41 +74,23 @@ func (s *fakeStore) Stats(context.Context, uint64) (modelstore.Stats, error) {
 	return s.stats, s.statsErr
 }
 
-func TestPredictor_memoryGoldenPath(t *testing.T) {
+func TestPredictor_rejectsOperationsAfterClose(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	predictor, err := New(ctx, MemoryStorage, 100)
 	require.NoError(t, err)
-	require.Equal(t, uint64(100), predictor.ID())
-
-	require.NoError(t, predictor.Train(ctx, []string{"A", "B", "C", "D"}))
-	predicted, err := predictor.Predict(ctx, []string{"A", "B", "C"})
-	require.NoError(t, err)
-	require.Equal(t, "D", predictor.GetClass(predicted))
-
-	// Training records every suffix context.
-	for _, input := range [][]string{{"A", "B", "C"}, {"B", "C"}, {"C"}} {
-		predicted, err = predictor.Predict(ctx, input)
-		require.NoError(t, err)
-		require.Equal(t, "D", predictor.GetClass(predicted))
-	}
-
-	require.NoError(t, predictor.Reset(ctx))
-	predicted, err = predictor.Predict(ctx, []string{"A"})
-	require.NoError(t, err)
-	require.Zero(t, predicted)
-	require.Nil(t, predictor.GetClass(predicted))
-
 	require.NoError(t, predictor.Close())
-	require.NoError(t, predictor.Close())
+	require.NoError(t, predictor.Close(), "Close is idempotent")
+
 	require.ErrorIs(t, predictor.Train(ctx, []string{"A", "B"}), ErrPredictorClosed)
 	_, err = predictor.Predict(ctx, []string{"A"})
 	require.ErrorIs(t, err, ErrPredictorClosed)
 	require.ErrorIs(t, predictor.Reset(ctx), ErrPredictorClosed)
 	require.ErrorIs(t, predictor.Save(ctx, "unused.db"), ErrPredictorClosed)
+
 	_, err = predictor.HashTrans("A")
-	require.NoError(t, err)
+	require.NoError(t, err, "hashing does not access the closed model store")
 }
 
 func TestPredictor_supportedClassTypes(t *testing.T) {

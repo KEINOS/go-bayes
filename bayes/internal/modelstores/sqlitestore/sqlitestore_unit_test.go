@@ -23,8 +23,8 @@ var (
 	errTestSinkFailed   = errors.New("sink failed")
 )
 
-//nolint:funlen // one lifecycle test keeps state transitions in order.
-func TestStore_lifecycle(t *testing.T) {
+//nolint:funlen // persistence, copy isolation, and unsigned ordering share one model.
+func TestStore_preservesConfigurationAndReturnsCopies(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()

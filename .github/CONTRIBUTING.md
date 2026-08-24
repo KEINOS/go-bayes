@@ -26,7 +26,7 @@ make bench
 make fuzz
 ```
 
-The library packages have 100% statement coverage. `make coverage` uses a 99.9% minimum. Directories beginning with `_` are excluded from Go's default `./...` expansion, so `make test_example` finds and tests each runnable example explicitly.
+`make coverage` reports statement coverage against the project's 99.9% goal. Review every uncovered branch and add a test when it represents behavior that callers can reach. Directories beginning with `_` are excluded from Go's default `./...` expansion, so `make test_example` finds and tests each runnable example explicitly.
 
 ## Package Structure
 

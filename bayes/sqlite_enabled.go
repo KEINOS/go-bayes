@@ -242,7 +242,7 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to set saved model permissions: %w", err)
 	}
 
-	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDONLY, 0) // #nosec G304 -- path was created above.
+	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDWR, 0) // #nosec G304 -- path was created above.
 	if err != nil {
 		return fmt.Errorf("failed to open temporary model for sync: %w", err)
 	}
@@ -259,16 +259,9 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to replace saved model: %w", err)
 	}
 
-	directoryFile, err := os.Open(directory) // #nosec G304 -- directory is the validated destination parent.
+	err = syncDirectory(directory)
 	if err != nil {
-		return fmt.Errorf("%w: failed to open destination directory: %w", ErrSaveDurabilityUnknown, err)
-	}
-
-	syncErr = directoryFile.Sync()
-
-	closeErr = directoryFile.Close()
-	if syncErr != nil || closeErr != nil {
-		return fmt.Errorf("%w: %w", ErrSaveDurabilityUnknown, errors.Join(syncErr, closeErr))
+		return fmt.Errorf("%w: %w", ErrSaveDurabilityUnknown, err)
 	}
 
 	return nil

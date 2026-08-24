@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/KEINOS/go-bayes/bayes/modelstore"
@@ -480,7 +481,7 @@ func openConnection(ctx context.Context, pathLock *PathLock, create bool, config
 	//nolint:exhaustruct // only local-file URI fields are required.
 	uri := url.URL{
 		Scheme: "file",
-		Path:   pathLock.canonical,
+		Path:   "/" + strings.TrimPrefix(filepath.ToSlash(pathLock.canonical), "/"),
 	}
 	query := uri.Query()
 	query.Set("mode", mode)

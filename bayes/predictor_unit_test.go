@@ -240,11 +240,9 @@ func TestPredictor_errorPaths(t *testing.T) {
 	predictor, err := New(ctx, MemoryStorage, 1)
 	require.NoError(t, err)
 
-	for _, items := range []any{nil, "not-a-slice"} {
-		require.Error(t, predictor.Train(ctx, items))
-		_, err = predictor.Predict(ctx, items)
-		require.Error(t, err)
-	}
+	require.ErrorIs(t, predictor.Train(ctx, "not-a-slice"), errPredictorItemsNotSlice)
+	_, err = predictor.Predict(ctx, "not-a-slice")
+	require.ErrorIs(t, err, errPredictorItemsNotSlice)
 
 	require.Error(t, predictor.Train(ctx, []any{make(chan int)}))
 	_, err = predictor.HashTrans(make(chan int))
@@ -268,6 +266,35 @@ func TestPredictor_errorPaths(t *testing.T) {
 	require.ErrorIs(t, uninitialized.Train(ctx, []string{"A"}), errPredictorNotInitialized)
 	require.ErrorIs(t, uninitialized.Reset(ctx), errPredictorNotInitialized)
 	require.NoError(t, uninitialized.Close())
+}
+
+func TestPredictor_rejectsNilItems(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	tests := []struct {
+		name  string
+		items any
+	}{
+		{name: "nil interface", items: nil},
+		{name: "nil any slice", items: []any(nil)},
+		{name: "nil string slice", items: []string(nil)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			predictor, err := New(ctx, MemoryStorage, 1)
+			require.NoError(t, err)
+
+			require.ErrorIs(t, predictor.Train(ctx, test.items), errPredictorItemsNil)
+
+			_, err = predictor.Predict(ctx, test.items)
+			require.ErrorIs(t, err, errPredictorItemsNil)
+		})
+	}
 }
 
 func TestPredictor_JSONGuards(t *testing.T) {

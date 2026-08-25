@@ -1,8 +1,12 @@
 package main
 
 import (
+	"io"
 	"strings"
 	"testing"
+
+	"github.com/KEINOS/go-bayes/bayes"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadIris_rejectsInvalidData(t *testing.T) {
@@ -25,4 +29,32 @@ func TestReadIris_rejectsInvalidData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRun_missingIrisData(t *testing.T) {
+	t.Parallel()
+
+	err := runWithDependencies(t.Output(), nil, bayes.MemoryStorage)
+	require.ErrorContains(t, err, "load embedded Iris data")
+}
+
+func TestRun_predictorCreationFailure(t *testing.T) {
+	t.Parallel()
+
+	err := runWithDependencies(t.Output(), rawIrisData, bayes.Storage(99))
+	require.ErrorContains(t, err, "create predictor")
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, io.ErrClosedPipe
+}
+
+func TestRun_writeFailure(t *testing.T) {
+	t.Parallel()
+
+	err := run(failingWriter{})
+	require.ErrorContains(t, err, "write training summary")
+	require.ErrorIs(t, err, io.ErrClosedPipe)
 }

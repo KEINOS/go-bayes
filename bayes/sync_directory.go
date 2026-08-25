@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 func syncDirectory(path string) error {
-	directory, err := os.Open(path) // #nosec G304 -- path is the validated destination parent.
+	directory, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("failed to open destination directory: %w", err)
 	}

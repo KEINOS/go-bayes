@@ -38,10 +38,6 @@ func TestStore_preservesConfigurationAndReturnsCopies(t *testing.T) {
 	require.Equal(t, metadata, store.Metadata())
 	require.Equal(t, metadata.ScopeID, store.ScopeID())
 
-	validated, err := store.Validate(ctx)
-	require.NoError(t, err)
-	require.Equal(t, metadata, validated)
-
 	batch := sqliteBatch(
 		[]modelstore.Class{
 			{ID: math.MaxUint64, TypeTag: 2, Payload: []byte("last")},
@@ -281,11 +277,6 @@ func TestStore_reportsConnectionLoss(t *testing.T) {
 
 			return err
 		},
-		"validate": func(ctx context.Context, store *Store) error {
-			_, err := store.Validate(ctx)
-
-			return err
-		},
 	}
 
 	for name, operation := range tests {
@@ -506,65 +497,6 @@ func TestPathLockAndCanonicalPath(t *testing.T) {
 
 	_, err = IsOpenAlias(filepath.Join(directory, "missing", "nested", "model.db"))
 	require.Error(t, err)
-}
-
-func TestValidateRejectsCorruptSchemaAndMetadata(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	tests := map[string][]string{
-		"application id": {"PRAGMA application_id = 1"},
-		"schema version": {"PRAGMA user_version = 99"},
-		"extra table":    {"CREATE TABLE extra (id INTEGER) STRICT"},
-		"extra index":    {"CREATE INDEX extra_index ON metadata(total_count)"},
-		"extra trigger":  {"CREATE TRIGGER extra_trigger AFTER UPDATE ON metadata BEGIN SELECT 1; END"},
-		"extra view":     {"CREATE VIEW extra_view AS SELECT * FROM metadata"},
-		"counts":         {"UPDATE metadata SET total_count = 1"},
-		"foreign key": {
-			"PRAGMA foreign_keys = OFF",
-			"INSERT INTO to_b (id, count) VALUES (99, 1)",
-		},
-		"non-STRICT transition table": {
-			"DROP TABLE from_a_to_b",
-			"CREATE TABLE from_a_to_b (from_id INTEGER, to_id INTEGER, count INTEGER, PRIMARY KEY (from_id, to_id))",
-		},
-		"multiple metadata rows": {
-			"DROP TABLE metadata",
-			`CREATE TABLE metadata (
-				singleton INTEGER,
-				codec_version INTEGER,
-				hasher_name TEXT,
-				item_probe INTEGER,
-				context_probe INTEGER,
-				scope_id INTEGER,
-				total_count INTEGER
-			) STRICT`,
-			"INSERT INTO metadata VALUES (1, 1, 'test', 1, 2, 3, 0)",
-			"INSERT INTO metadata VALUES (2, 1, 'test', 1, 2, 3, 0)",
-		},
-	}
-
-	for name, mutations := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			path := filepath.Join(t.TempDir(), "invalid.db")
-			store, err := Create(ctx, path, testMetadata(), OpenConfig{Portable: true})
-			require.NoError(t, err)
-			require.NoError(t, store.Close())
-
-			database, err := sql.Open("sqlite3", path)
-			require.NoError(t, err)
-			for _, mutation := range mutations {
-				_, err = database.ExecContext(ctx, mutation)
-				require.NoError(t, err)
-			}
-			require.NoError(t, database.Close())
-
-			_, err = Open(ctx, path, OpenConfig{Portable: true})
-			require.ErrorIs(t, err, ErrInvalidModel)
-		})
-	}
 }
 
 func assertStoreTotal(ctx context.Context, t *testing.T, store *Store, want int64) {

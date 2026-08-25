@@ -176,7 +176,7 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("%w: destination is an active model", ErrModelLocked)
 	}
 
-	mode := os.FileMode(0o600) //nolint:mnd // private model files default to owner-only access.
+	mode := os.FileMode(fileModePrivate) // default to owner-only access.
 	info, statErr := os.Stat(destinationPath)
 	if statErr == nil {
 		mode = info.Mode().Perm()
@@ -191,7 +191,7 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to create temporary model: %w", err)
 	}
 
-	temporaryPath := temporary.Name()
+	temporaryPath := filepath.Clean(temporary.Name())
 
 	err = temporary.Close()
 	if err != nil {
@@ -242,7 +242,7 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to set saved model permissions: %w", err)
 	}
 
-	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDWR, 0) // #nosec G304 -- path was created above.
+	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary model for sync: %w", err)
 	}

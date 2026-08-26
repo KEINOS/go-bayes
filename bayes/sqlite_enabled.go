@@ -237,14 +237,14 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to close temporary model: %w", closeErr)
 	}
 
-	err = os.Chmod(temporaryPath, mode)
-	if err != nil {
-		return fmt.Errorf("failed to set saved model permissions: %w", err)
-	}
-
 	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary model for sync: %w", err)
+	}
+
+	chmodErr := temporaryFile.Chmod(mode)
+	if chmodErr != nil {
+		return fmt.Errorf("failed to set saved model permissions: %w", errors.Join(chmodErr, temporaryFile.Close()))
 	}
 
 	syncErr := temporaryFile.Sync()

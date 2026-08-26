@@ -75,6 +75,21 @@ func TestSQLite_SavePreservesPermissionsAndLocksActiveModels(t *testing.T) {
 	if preservesPermissions {
 		require.Equal(t, os.FileMode(0o640), info.Mode().Perm())
 	}
+
+	if !preservesPermissions {
+		return
+	}
+
+	require.NoError(t, os.Chmod(copyPath, 0o400)) // #nosec G302 -- permission preservation is under test.
+	t.Cleanup(func() {
+		require.NoError(t, os.Chmod(copyPath, 0o600)) // #nosec G302 -- allow cleanup on all platforms.
+	})
+
+	require.NoError(t, memory.Save(ctx, copyPath))
+
+	info, err = os.Stat(copyPath)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o400), info.Mode().Perm())
 }
 
 func TestSQLite_NewAndResetAreDurable(t *testing.T) {

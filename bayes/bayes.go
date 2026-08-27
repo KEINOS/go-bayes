@@ -29,6 +29,10 @@ var (
 	errStorageConfig     = errors.New("invalid storage configuration")
 )
 
+const (
+	fileModePrivate = 0o600
+)
+
 // ModelStore keeps exact model counts and reversible class records.
 type ModelStore = modelstore.ModelStore
 

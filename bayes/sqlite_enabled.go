@@ -176,7 +176,7 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("%w: destination is an active model", ErrModelLocked)
 	}
 
-	mode := os.FileMode(0o600) //nolint:mnd // private model files default to owner-only access.
+	mode := os.FileMode(fileModePrivate) // default to owner-only access.
 	info, statErr := os.Stat(destinationPath)
 	if statErr == nil {
 		mode = info.Mode().Perm()
@@ -191,7 +191,7 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to create temporary model: %w", err)
 	}
 
-	temporaryPath := temporary.Name()
+	temporaryPath := filepath.Clean(temporary.Name())
 
 	err = temporary.Close()
 	if err != nil {
@@ -237,14 +237,14 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to close temporary model: %w", closeErr)
 	}
 
-	err = os.Chmod(temporaryPath, mode)
-	if err != nil {
-		return fmt.Errorf("failed to set saved model permissions: %w", err)
-	}
-
-	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDONLY, 0) // #nosec G304 -- path was created above.
+	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary model for sync: %w", err)
+	}
+
+	chmodErr := temporaryFile.Chmod(mode)
+	if chmodErr != nil {
+		return fmt.Errorf("failed to set saved model permissions: %w", errors.Join(chmodErr, temporaryFile.Close()))
 	}
 
 	syncErr := temporaryFile.Sync()
@@ -259,16 +259,9 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 		return fmt.Errorf("failed to replace saved model: %w", err)
 	}
 
-	directoryFile, err := os.Open(directory) // #nosec G304 -- directory is the validated destination parent.
+	err = syncDirectory(directory)
 	if err != nil {
-		return fmt.Errorf("%w: failed to open destination directory: %w", ErrSaveDurabilityUnknown, err)
-	}
-
-	syncErr = directoryFile.Sync()
-
-	closeErr = directoryFile.Close()
-	if syncErr != nil || closeErr != nil {
-		return fmt.Errorf("%w: %w", ErrSaveDurabilityUnknown, errors.Join(syncErr, closeErr))
+		return fmt.Errorf("%w: %w", ErrSaveDurabilityUnknown, err)
 	}
 
 	return nil

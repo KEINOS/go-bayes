@@ -144,6 +144,70 @@ func ExampleNew() {
 	// Output: 100
 }
 
+func ExamplePredictor_foldedContexts() {
+	ctx := context.Background()
+	predictor, err := bayes.New(ctx, bayes.MemoryStorage, 100)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	defer func() {
+		err := predictor.Close()
+		if err != nil {
+			log.Panic(err)
+		}
+	}()
+
+	err = predictor.Train(ctx, []string{"A", "B", "C", "D"})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Training records each suffix of the ordered context.
+	for _, input := range [][]string{{"A", "B", "C"}, {"B", "C"}, {"C"}} {
+		classID, err := predictor.Predict(ctx, input)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		fmt.Println(predictor.GetClass(classID))
+	}
+
+	// Output:
+	// D
+	// D
+	// D
+}
+
+func ExamplePredictor_Reset() {
+	ctx := context.Background()
+	predictor, err := bayes.New(ctx, bayes.MemoryStorage, 100)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = predictor.Train(ctx, []string{"A", "B"})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = predictor.Reset(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	classID, err := predictor.Predict(ctx, []string{"A"})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(classID)
+	fmt.Println(predictor.GetClass(classID))
+	// Output:
+	// 0
+	// <nil>
+}
+
 func ExampleWithHasher() {
 	predictor, err := bayes.New(
 		context.Background(),

@@ -4,6 +4,7 @@
 package sqlitestore
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/KEINOS/go-bayes/bayes/modelstore"
@@ -76,6 +78,28 @@ type Store struct {
 type registeredFile struct {
 	path string
 	info os.FileInfo
+}
+
+type createDependencies struct {
+	acquirePathLock  func(context.Context, string) (*PathLock, error)
+	stat             func(string) (os.FileInfo, error)
+	openConnection   func(context.Context, *PathLock, bool, OpenConfig) (*Store, error)
+	beginTransaction func(context.Context, *Store) (createTransaction, error)
+	refreshFileInfo  func(*Store) error
+	register         func(*Store)
+}
+
+type createTransaction interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	Commit() error
+	Rollback() error
+}
+
+type createState struct {
+	pathLock    *PathLock
+	store       *Store
+	transaction createTransaction
+	keepStore   bool
 }
 
 var _ modelstore.ModelStore = (*Store)(nil)
@@ -174,7 +198,10 @@ func (s *Store) Close() error {
 
 	var closeErr error
 	if s.conn != nil {
-		closeErr = errors.Join(closeErr, s.conn.Close())
+		err := s.conn.Close()
+		if !errors.Is(err, sql.ErrConnDone) {
+			closeErr = errors.Join(closeErr, err)
+		}
 	}
 
 	if s.db != nil {
@@ -200,65 +227,25 @@ func (l *PathLock) Close() error {
 }
 
 // Create creates a new empty SQLite model. The target must not exist.
-//
-//nolint:cyclop,funlen,varnamelen // schema creation keeps cleanup next to each failure boundary.
 func Create(ctx context.Context, path string, metadata Metadata, config OpenConfig) (*Store, error) {
-	pathLock, err := AcquirePathLock(ctx, path)
-	if err != nil {
-		return nil, err
-	}
+	return createWithDependencies(ctx, path, metadata, config, defaultCreateDependencies())
+}
 
-	_, err = os.Stat(pathLock.canonical)
-	if err == nil {
-		_ = pathLock.Close()
-
-		return nil, fmt.Errorf("%w: model path already exists", ErrInvalidModel)
-	}
-
-	if !errors.Is(err, os.ErrNotExist) {
-		_ = pathLock.Close()
-
-		return nil, fmt.Errorf("failed to inspect model path: %w", err)
-	}
-
-	store, err := openConnection(ctx, pathLock, true, config)
-	if err != nil {
-		_ = pathLock.Close()
-
-		return nil, err
-	}
-
-	store.metadata = metadata
-
-	tx, err := store.conn.BeginTx(ctx, nil)
-	if err != nil {
-		_ = store.Close()
-
-		return nil, fmt.Errorf("failed to begin model schema transaction: %w", err)
-	}
-
-	rollback := true
-	defer func() {
-		if rollback {
-			_ = tx.Rollback()
-		}
-	}()
-
+func createSchema(ctx context.Context, transaction createTransaction, metadata Metadata) error {
 	statements := []string{
 		fmt.Sprintf("PRAGMA application_id = %d", applicationID),
 		fmt.Sprintf("PRAGMA user_version = %d", schemaVersion),
 		schemaSQL,
 	}
-	for _, statement := range statements {
-		_, err = tx.ExecContext(ctx, statement)
-		if err != nil {
-			_ = store.Close()
 
-			return nil, fmt.Errorf("failed to create model schema: %w", err)
+	for _, statement := range statements {
+		_, err := transaction.ExecContext(ctx, statement)
+		if err != nil {
+			return fmt.Errorf("failed to create model schema: %w", err)
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, `
+	_, err := transaction.ExecContext(ctx, `
 INSERT INTO metadata (
     singleton, codec_version, hasher_name, item_probe, context_probe, scope_id, total_count
 ) VALUES (1, ?, ?, ?, ?, ?, 0)`,
@@ -269,31 +256,117 @@ INSERT INTO metadata (
 		idToSQL(metadata.ScopeID),
 	)
 	if err != nil {
-		_ = store.Close()
-
-		return nil, fmt.Errorf("failed to create model metadata: %w", err)
+		return fmt.Errorf("failed to create model metadata: %w", err)
 	}
 
-	err = tx.Commit()
+	return nil
+}
+
+func createWithDependencies(
+	ctx context.Context,
+	path string,
+	metadata Metadata,
+	config OpenConfig,
+	dependencies createDependencies,
+) (*Store, error) {
+	pathLock, err := dependencies.acquirePathLock(ctx, path)
 	if err != nil {
-		store.poisoned = true
-		_ = store.Close()
+		return nil, err
+	}
+
+	state := &createState{pathLock: pathLock}
+	defer state.cleanup()
+
+	err = ensureCreateTargetMissing(pathLock.canonical, dependencies.stat)
+	if err != nil {
+		return nil, err
+	}
+
+	state.store, err = dependencies.openConnection(ctx, pathLock, true, config)
+	if err != nil {
+		return nil, err
+	}
+
+	state.store.metadata = metadata
+
+	transaction, err := dependencies.beginTransaction(ctx, state.store)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin model schema transaction: %w", err)
+	}
+	state.transaction = transaction
+
+	err = createSchema(ctx, state.transaction, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	err = state.transaction.Commit()
+	if err != nil {
+		state.store.poisoned = true
 
 		return nil, fmt.Errorf("%w: %w", modelstore.ErrCommitIndeterminate, err)
 	}
 
-	rollback = false
+	state.transaction = nil
 
-	err = store.refreshFileInfo()
+	err = dependencies.refreshFileInfo(state.store)
 	if err != nil {
-		_ = store.Close()
-
 		return nil, err
 	}
 
-	register(store)
+	dependencies.register(state.store)
+	state.keepStore = true
 
-	return store, nil
+	return state.store, nil
+}
+
+func defaultCreateDependencies() createDependencies {
+	return createDependencies{
+		acquirePathLock: AcquirePathLock,
+		stat:            os.Stat,
+		openConnection:  openConnection,
+		beginTransaction: func(ctx context.Context, store *Store) (createTransaction, error) {
+			transaction, err := store.conn.BeginTx(ctx, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to begin SQLite transaction: %w", err)
+			}
+
+			return transaction, nil
+		},
+		refreshFileInfo: (*Store).refreshFileInfo,
+		register:        register,
+	}
+}
+
+func ensureCreateTargetMissing(path string, stat func(string) (os.FileInfo, error)) error {
+	_, err := stat(path)
+	if err == nil {
+		return fmt.Errorf("%w: model path already exists", ErrInvalidModel)
+	}
+
+	if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to inspect model path: %w", err)
+	}
+
+	return nil
+}
+
+func (s *createState) cleanup() {
+	if s.keepStore {
+		return
+	}
+
+	if s.transaction != nil {
+		_ = s.transaction.Rollback()
+	}
+
+	if s.store != nil {
+		_ = s.store.Close()
+
+		return
+	}
+
+	_ = s.pathLock.Close()
 }
 
 // IsOpenAlias reports whether path names any file open by this process.
@@ -408,7 +481,7 @@ func openConnection(ctx context.Context, pathLock *PathLock, create bool, config
 	//nolint:exhaustruct // only local-file URI fields are required.
 	uri := url.URL{
 		Scheme: "file",
-		Path:   pathLock.canonical,
+		Path:   "/" + strings.TrimPrefix(filepath.ToSlash(pathLock.canonical), "/"),
 	}
 	query := uri.Query()
 	query.Set("mode", mode)
@@ -504,17 +577,6 @@ func idFromSQL(id int64) uint64 {
 	return uint64(id) // #nosec G115 -- restore the original unsigned bits.
 }
 
-func compareID(left, right uint64) int {
-	switch {
-	case left < right:
-		return -1
-	case left > right:
-		return 1
-	default:
-		return 0
-	}
-}
-
 func sortedClasses(classes []modelstore.Class) []modelstore.Class {
 	result := make([]modelstore.Class, len(classes))
 	for index, class := range classes {
@@ -523,7 +585,7 @@ func sortedClasses(classes []modelstore.Class) []modelstore.Class {
 	}
 
 	slices.SortFunc(result, func(left, right modelstore.Class) int {
-		return compareID(left.ID, right.ID)
+		return cmp.Compare(left.ID, right.ID)
 	})
 
 	return result

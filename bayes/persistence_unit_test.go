@@ -17,14 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:funlen // one lifecycle test keeps persistence transitions in order.
-func TestSQLite_SaveLoadOpenLifecycle(t *testing.T) {
+//nolint:funlen // permission, locking, and replacement checks share one model.
+func TestSQLite_SavePreservesPermissionsAndLocksActiveModels(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	directory := t.TempDir()
 	modelPath := filepath.Join(directory, "model.db")
 	copyPath := filepath.Join(directory, "copy.db")
+	preservesPermissions := filesystemPreservesPermissions(t, directory)
 
 	memory, err := New(ctx, MemoryStorage, 77, WithHasher("blake3"))
 	require.NoError(t, err)
@@ -33,7 +34,9 @@ func TestSQLite_SaveLoadOpenLifecycle(t *testing.T) {
 
 	info, err := os.Stat(modelPath)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	if preservesPermissions {
+		require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 	require.NoFileExists(t, modelPath+"-wal")
 	require.NoFileExists(t, modelPath+"-shm")
 
@@ -69,7 +72,24 @@ func TestSQLite_SaveLoadOpenLifecycle(t *testing.T) {
 	require.NoError(t, memory.Save(ctx, copyPath))
 	info, err = os.Stat(copyPath)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o640), info.Mode().Perm())
+	if preservesPermissions {
+		require.Equal(t, os.FileMode(0o640), info.Mode().Perm())
+	}
+
+	if !preservesPermissions {
+		return
+	}
+
+	require.NoError(t, os.Chmod(copyPath, 0o400)) // #nosec G302 -- permission preservation is under test.
+	t.Cleanup(func() {
+		require.NoError(t, os.Chmod(copyPath, 0o600)) // #nosec G302 -- allow cleanup on all platforms.
+	})
+
+	require.NoError(t, memory.Save(ctx, copyPath))
+
+	info, err = os.Stat(copyPath)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o400), info.Mode().Perm())
 }
 
 func TestSQLite_NewAndResetAreDurable(t *testing.T) {
@@ -224,6 +244,12 @@ func TestSQLite_rejectsInvalidFilesAndOptions(t *testing.T) {
 
 	_, err = Load(ctx, validPath)
 	require.ErrorIs(t, err, ErrInvalidModel)
+
+	failedOption := func(*PredictorConfig) error { return errTestOptionFailed }
+	_, err = Load(ctx, validPath, failedOption)
+	require.ErrorIs(t, err, errTestOptionFailed)
+	_, err = Open(ctx, validPath, failedOption)
+	require.ErrorIs(t, err, errTestOptionFailed)
 }
 
 func TestSQLite_SaveErrors(t *testing.T) {
@@ -241,6 +267,26 @@ func TestSQLite_SaveErrors(t *testing.T) {
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 	require.ErrorIs(t, predictor.Save(canceled, filepath.Join(t.TempDir(), "model.db")), context.Canceled)
+
+	classesFailure := &Predictor{
+		hasher: NewDefaultHasher(),
+		store:  &fakeStore{scope: 1, classesErr: errTestClassesFailed},
+	}
+	require.ErrorIs(
+		t,
+		saveModel(ctx, classesFailure, filepath.Join(t.TempDir(), "classes.db")),
+		errTestClassesFailed,
+	)
+
+	exportFailure := &Predictor{
+		hasher: NewDefaultHasher(),
+		store:  &fakeStore{scope: 1, exportErr: errTestExportFailed},
+	}
+	require.ErrorIs(
+		t,
+		saveModel(ctx, exportFailure, filepath.Join(t.TempDir(), "export.db")),
+		errTestExportFailed,
+	)
 }
 
 func assertPrediction(t *testing.T, predictor *Predictor, input any, want any) {
@@ -249,6 +295,25 @@ func assertPrediction(t *testing.T, predictor *Predictor, input any, want any) {
 	id, err := predictor.Predict(context.Background(), input)
 	require.NoError(t, err)
 	require.Equal(t, want, predictor.GetClass(id))
+}
+
+func filesystemPreservesPermissions(t *testing.T, directory string) bool {
+	t.Helper()
+
+	path := filepath.Join(directory, "permission-probe")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+	require.NoError(t, os.Chmod(path, 0o640)) // #nosec G302 -- permission behavior is under test.
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+
+	if info.Mode().Perm() != os.FileMode(0o640) {
+		t.Logf("filesystem does not preserve Unix permission bits: got %04o", info.Mode().Perm())
+
+		return false
+	}
+
+	return true
 }
 
 type stableTestHasher struct {

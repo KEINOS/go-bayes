@@ -108,12 +108,16 @@ func readMushrooms(input io.Reader) ([]mushroomSample, error) {
 }
 
 func run(output io.Writer) error {
-	samples, err := readMushrooms(bytes.NewReader(rawMushroomData))
+	return runWithDependencies(output, rawMushroomData, bayes.MemoryStorage)
+}
+
+func runWithDependencies(output io.Writer, data []byte, storage bayes.Storage) error {
+	samples, err := readMushrooms(bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("load embedded Mushroom data: %w", err)
 	}
 
-	predictor, err := trainPredictor(samples)
+	predictor, err := trainPredictor(samples, storage)
 	if err != nil {
 		return err
 	}
@@ -157,8 +161,8 @@ func run(output io.Writer) error {
 	return nil
 }
 
-func trainPredictor(samples []mushroomSample) (*bayes.Predictor, error) {
-	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
+func trainPredictor(samples []mushroomSample, storage bayes.Storage) (*bayes.Predictor, error) {
+	predictor, err := bayes.New(context.Background(), storage, datasetScopeID)
 	if err != nil {
 		return nil, fmt.Errorf("create predictor: %w", err)
 	}

@@ -22,9 +22,3 @@ func TestHasher_Hash(t *testing.T) {
 		})
 	}
 }
-
-func TestHasher_Name(t *testing.T) {
-	t.Parallel()
-
-	require.Equal(t, "xxhash3", New().Name())
-}

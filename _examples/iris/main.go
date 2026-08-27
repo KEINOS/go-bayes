@@ -91,12 +91,16 @@ func readIris(input io.Reader) ([]irisSample, error) {
 }
 
 func run(output io.Writer) error {
-	samples, err := readIris(bytes.NewReader(rawIrisData))
+	return runWithDependencies(output, rawIrisData, bayes.MemoryStorage)
+}
+
+func runWithDependencies(output io.Writer, data []byte, storage bayes.Storage) error {
+	samples, err := readIris(bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("load embedded Iris data: %w", err)
 	}
 
-	predictor, err := trainPredictor(samples)
+	predictor, err := trainPredictor(samples, storage)
 	if err != nil {
 		return err
 	}
@@ -142,8 +146,8 @@ func run(output io.Writer) error {
 	return nil
 }
 
-func trainPredictor(samples []irisSample) (*bayes.Predictor, error) {
-	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
+func trainPredictor(samples []irisSample, storage bayes.Storage) (*bayes.Predictor, error) {
+	predictor, err := bayes.New(context.Background(), storage, datasetScopeID)
 	if err != nil {
 		return nil, fmt.Errorf("create predictor: %w", err)
 	}

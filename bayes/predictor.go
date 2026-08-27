@@ -2,6 +2,7 @@ package bayes
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -163,6 +164,7 @@ func (p *Predictor) MarshalJSON() ([]byte, error) {
 }
 
 // Predict scores learned candidates for one ordered context.
+// Items must be a non-nil slice.
 //
 //nolint:cyclop // scoring keeps error, empty-model, and deterministic tie behavior explicit.
 func (p *Predictor) Predict(ctx context.Context, items any) (uint64, error) {
@@ -247,6 +249,7 @@ func (p *Predictor) Save(ctx context.Context, path string) error {
 
 // Train learns each next value in an observed sequence and every folded suffix
 // of its preceding ordered context.
+// Items must be a non-nil slice.
 //
 //nolint:cyclop,funlen,gocognit // training pre-encodes values before one atomic store call.
 func (p *Predictor) Train(ctx context.Context, items any) error {
@@ -307,7 +310,7 @@ func (p *Predictor) Train(ctx context.Context, items any) error {
 	}
 
 	slices.SortFunc(classes, func(left, right modelstore.Class) int {
-		return compareUint64(left.ID, right.ID)
+		return cmp.Compare(left.ID, right.ID)
 	})
 
 	batch := modelstore.TrainingBatch{
@@ -365,12 +368,19 @@ func normalizeItems(items any) ([]any, error) {
 	}
 
 	if values, ok := items.([]any); ok {
+		if values == nil {
+			return nil, errPredictorItemsNil
+		}
+
 		return values, nil
 	}
 
 	value := reflect.ValueOf(items)
 	if value.Kind() != reflect.Slice {
 		return nil, errPredictorItemsNotSlice
+	}
+	if value.IsNil() {
+		return nil, errPredictorItemsNil
 	}
 
 	normalized := make([]any, 0, value.Len())
@@ -389,15 +399,4 @@ func cloneStoredClass(class modelstore.Class) modelstore.Class {
 
 func sameStoredClass(left, right modelstore.Class) bool {
 	return left.TypeTag == right.TypeTag && bytes.Equal(left.Payload, right.Payload)
-}
-
-func compareUint64(left, right uint64) int {
-	switch {
-	case left < right:
-		return -1
-	case left > right:
-		return 1
-	default:
-		return 0
-	}
 }

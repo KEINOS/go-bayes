@@ -21,7 +21,11 @@ func main() {
 }
 
 func run(output io.Writer) error {
-	predictor, err := bayes.New(context.Background(), bayes.MemoryStorage, datasetScopeID)
+	return runWithStorage(output, bayes.MemoryStorage)
+}
+
+func runWithStorage(output io.Writer, storage bayes.Storage) error {
+	predictor, err := bayes.New(context.Background(), storage, datasetScopeID)
 	if err != nil {
 		return fmt.Errorf("create predictor: %w", err)
 	}

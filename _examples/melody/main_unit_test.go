@@ -4,6 +4,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/KEINOS/go-bayes/bayes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,4 +21,11 @@ func TestRun_reportsWriteFailure(t *testing.T) {
 
 	require.ErrorContains(t, err, "write prediction")
 	require.ErrorIs(t, err, io.ErrClosedPipe)
+}
+
+func TestRun_predictorCreationFailure(t *testing.T) {
+	t.Parallel()
+
+	err := runWithStorage(t.Output(), bayes.Storage(99))
+	require.ErrorContains(t, err, "create predictor")
 }

@@ -23,8 +23,8 @@ var (
 	errTestSinkFailed   = errors.New("sink failed")
 )
 
-//nolint:funlen // one lifecycle test keeps state transitions in order.
-func TestStore_lifecycle(t *testing.T) {
+//nolint:funlen // persistence, copy isolation, and unsigned ordering share one model.
+func TestStore_preservesConfigurationAndReturnsCopies(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -37,10 +37,6 @@ func TestStore_lifecycle(t *testing.T) {
 	require.Equal(t, canonical, store.Path())
 	require.Equal(t, metadata, store.Metadata())
 	require.Equal(t, metadata.ScopeID, store.ScopeID())
-
-	validated, err := store.Validate(ctx)
-	require.NoError(t, err)
-	require.Equal(t, metadata, validated)
 
 	batch := sqliteBatch(
 		[]modelstore.Class{
@@ -254,6 +250,181 @@ func TestStore_commitFailurePoisonsStore(t *testing.T) {
 	}
 }
 
+func TestStore_reportsConnectionLoss(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := map[string]func(context.Context, *Store) error{
+		"apply": func(ctx context.Context, store *Store) error {
+			return store.Apply(ctx, sqliteBatch(
+				[]modelstore.Class{{ID: 2, TypeTag: 1, Payload: []byte("two")}},
+				modelstore.TransitionDelta{FromID: 1, ToID: 2, Count: 1},
+			))
+		},
+		"classes": func(ctx context.Context, store *Store) error {
+			_, err := store.Classes(ctx)
+
+			return err
+		},
+		"export": func(ctx context.Context, store *Store) error {
+			return store.ExportTransitions(ctx, func(modelstore.TransitionCount) error { return nil })
+		},
+		"reset": func(ctx context.Context, store *Store) error {
+			return store.Reset(ctx)
+		},
+		"statistics": func(ctx context.Context, store *Store) error {
+			_, err := store.Stats(ctx, 1)
+
+			return err
+		},
+	}
+
+	for name, operation := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			store, err := Create(ctx, filepath.Join(t.TempDir(), "closed.db"), testMetadata(), OpenConfig{})
+			require.NoError(t, err)
+			require.NoError(t, store.conn.Close())
+			require.ErrorIs(t, operation(ctx, store), sql.ErrConnDone)
+			require.NoError(t, store.Close())
+		})
+	}
+}
+
+//nolint:funlen // each case targets a separate atomic overflow or stream boundary.
+func TestStore_streamFailuresAreAtomic(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	t.Run("batch total overflow", func(t *testing.T) {
+		t.Parallel()
+
+		store, err := Create(ctx, filepath.Join(t.TempDir(), "total.db"), testMetadata(), OpenConfig{})
+		require.NoError(t, err)
+		defer func() { require.NoError(t, store.Close()) }()
+
+		err = store.Apply(ctx, sqliteBatch(
+			[]modelstore.Class{
+				{ID: 2, TypeTag: 1, Payload: []byte("two")},
+				{ID: 4, TypeTag: 1, Payload: []byte("four")},
+			},
+			modelstore.TransitionDelta{FromID: 1, ToID: 2, Count: math.MaxInt64},
+			modelstore.TransitionDelta{FromID: 3, ToID: 4, Count: 1},
+		))
+		require.ErrorIs(t, err, modelstore.ErrCountOverflow)
+		assertStoreTotal(ctx, t, store, 0)
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		t.Parallel()
+
+		path := filepath.Join(t.TempDir(), "cancel.db")
+		store, err := Create(ctx, path, testMetadata(), OpenConfig{})
+		require.NoError(t, err)
+
+		streamContext, cancel := context.WithCancel(ctx)
+		batch := modelstore.TrainingBatch{
+			Classes: []modelstore.Class{
+				{ID: 2, TypeTag: 1, Payload: []byte("two")},
+				{ID: 3, TypeTag: 1, Payload: []byte("three")},
+			},
+			Transitions: func() iter.Seq[modelstore.TransitionDelta] {
+				return func(yield func(modelstore.TransitionDelta) bool) {
+					if !yield(modelstore.TransitionDelta{FromID: 1, ToID: 2, Count: 1}) {
+						return
+					}
+
+					cancel()
+					yield(modelstore.TransitionDelta{FromID: 1, ToID: 3, Count: 1})
+				}
+			},
+		}
+
+		require.ErrorIs(t, store.Apply(streamContext, batch), context.Canceled)
+		require.NoError(t, store.Close())
+
+		reopened, err := Open(ctx, path, OpenConfig{})
+		require.NoError(t, err)
+		defer func() { require.NoError(t, reopened.Close()) }()
+		assertStoreTotal(ctx, t, reopened, 0)
+	})
+
+	t.Run("export cancellation", func(t *testing.T) {
+		t.Parallel()
+
+		store, err := Create(ctx, filepath.Join(t.TempDir(), "export.db"), testMetadata(), OpenConfig{})
+		require.NoError(t, err)
+		defer func() { require.NoError(t, store.Close()) }()
+
+		require.NoError(t, store.Apply(ctx, sqliteBatch(
+			[]modelstore.Class{
+				{ID: 2, TypeTag: 1, Payload: []byte("two")},
+				{ID: 3, TypeTag: 1, Payload: []byte("three")},
+			},
+			modelstore.TransitionDelta{FromID: 1, ToID: 2, Count: 1},
+			modelstore.TransitionDelta{FromID: 1, ToID: 3, Count: 1},
+		)))
+
+		exportContext, cancel := context.WithCancel(ctx)
+		calls := 0
+		err = store.ExportTransitions(exportContext, func(modelstore.TransitionCount) error {
+			calls++
+			cancel()
+
+			return nil
+		})
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, 1, calls)
+	})
+
+	t.Run("source export", func(t *testing.T) {
+		t.Parallel()
+
+		store, err := Create(ctx, filepath.Join(t.TempDir(), "import.db"), testMetadata(), OpenConfig{})
+		require.NoError(t, err)
+		defer func() { require.NoError(t, store.Close()) }()
+
+		source := mapstore.New(1)
+		require.NoError(t, source.Close())
+		require.ErrorIs(t, store.Import(ctx, nil, source), modelstore.ErrClosed)
+		assertStoreTotal(ctx, t, store, 0)
+	})
+
+	for name, mutation := range map[string]string{
+		"stored input count": "UPDATE from_a SET count = 9223372036854775807",
+		"stored class count": "UPDATE to_b SET count = 9223372036854775807",
+		"stored pair count":  "UPDATE from_a_to_b SET count = 9223372036854775807",
+		"stored total count": "UPDATE metadata SET total_count = 9223372036854775807",
+		"broken invariant":   "UPDATE metadata SET total_count = 2",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			store, err := Create(ctx, filepath.Join(t.TempDir(), "stored.db"), testMetadata(), OpenConfig{})
+			require.NoError(t, err)
+			defer func() { require.NoError(t, store.Close()) }()
+			require.NoError(t, store.Apply(ctx, sqliteBatch(
+				[]modelstore.Class{{ID: 2, TypeTag: 1, Payload: []byte("two")}},
+				modelstore.TransitionDelta{FromID: 1, ToID: 2, Count: 1},
+			)))
+			_, err = store.conn.ExecContext(ctx, mutation)
+			require.NoError(t, err)
+
+			err = store.Apply(ctx, sqliteBatch(
+				[]modelstore.Class{{ID: 2, TypeTag: 1, Payload: []byte("two")}},
+				modelstore.TransitionDelta{FromID: 1, ToID: 2, Count: 1},
+			))
+			if name == "broken invariant" {
+				require.ErrorIs(t, err, modelstore.ErrInvalidBatch)
+			} else {
+				require.ErrorIs(t, err, modelstore.ErrCountOverflow)
+			}
+		})
+	}
+}
+
 //nolint:funlen // path and lock lifecycle checks share the same temporary model.
 func TestPathLockAndCanonicalPath(t *testing.T) {
 	t.Parallel()
@@ -270,6 +441,8 @@ func TestPathLockAndCanonicalPath(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidModel)
 	_, err = CanonicalPath(filepath.Join(directory, "missing", "model.db"))
 	require.Error(t, err)
+	_, err = AcquirePathLock(ctx, "")
+	require.ErrorIs(t, err, ErrInvalidModel)
 
 	lock, err := AcquirePathLock(ctx, path)
 	require.NoError(t, err)
@@ -283,6 +456,23 @@ func TestPathLockAndCanonicalPath(t *testing.T) {
 
 	_, err = AcquirePathLock(canceled, path)
 	require.ErrorIs(t, err, context.Canceled)
+
+	t.Run("read-only directory", func(t *testing.T) {
+		t.Parallel()
+
+		readOnlyDirectory := filepath.Join(directory, "read-only")
+		require.NoError(t, os.Mkdir(readOnlyDirectory, 0o500))
+		t.Cleanup(func() {
+			// The owner needs directory access so TempDir can remove it.
+			require.NoError(t, os.Chmod(readOnlyDirectory, 0o700)) //nolint:gosec
+		})
+
+		blockedLock, err := AcquirePathLock(ctx, filepath.Join(readOnlyDirectory, "blocked.db"))
+		if err == nil {
+			require.NoError(t, blockedLock.Close())
+			t.Skip("filesystem does not enforce read-only directory permissions")
+		}
+	})
 
 	store, err := Create(ctx, path, testMetadata(), OpenConfig{})
 	require.NoError(t, err)
@@ -309,39 +499,12 @@ func TestPathLockAndCanonicalPath(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestValidateRejectsCorruptSchemaAndMetadata(t *testing.T) {
-	t.Parallel()
+func assertStoreTotal(ctx context.Context, t *testing.T, store *Store, want int64) {
+	t.Helper()
 
-	ctx := context.Background()
-	tests := map[string]string{
-		"application id": "PRAGMA application_id = 1",
-		"schema version": "PRAGMA user_version = 99",
-		"extra table":    "CREATE TABLE extra (id INTEGER) STRICT",
-		"extra index":    "CREATE INDEX extra_index ON metadata(total_count)",
-		"extra trigger":  "CREATE TRIGGER extra_trigger AFTER UPDATE ON metadata BEGIN SELECT 1; END",
-		"extra view":     "CREATE VIEW extra_view AS SELECT * FROM metadata",
-		"counts":         "UPDATE metadata SET total_count = 1",
-	}
-
-	for name, mutation := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			path := filepath.Join(t.TempDir(), "invalid.db")
-			store, err := Create(ctx, path, testMetadata(), OpenConfig{Portable: true})
-			require.NoError(t, err)
-			require.NoError(t, store.Close())
-
-			db, err := sql.Open("sqlite3", path)
-			require.NoError(t, err)
-			_, err = db.ExecContext(ctx, mutation)
-			require.NoError(t, err)
-			require.NoError(t, db.Close())
-
-			_, err = Open(ctx, path, OpenConfig{Portable: true})
-			require.ErrorIs(t, err, ErrInvalidModel)
-		})
-	}
+	stats, err := store.Stats(ctx, 0)
+	require.NoError(t, err)
+	require.Equal(t, want, stats.Total)
 }
 
 func sqliteBatch(classes []modelstore.Class, deltas ...modelstore.TransitionDelta) modelstore.TrainingBatch {

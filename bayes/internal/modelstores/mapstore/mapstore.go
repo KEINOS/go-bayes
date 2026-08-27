@@ -3,6 +3,7 @@ package mapstore
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -185,7 +186,7 @@ func (s *Store) Classes(ctx context.Context) ([]modelstore.Class, error) {
 	}
 
 	slices.SortFunc(classes, func(left, right modelstore.Class) int {
-		return compareID(left.ID, right.ID)
+		return cmp.Compare(left.ID, right.ID)
 	})
 
 	return classes, nil
@@ -219,11 +220,11 @@ func (s *Store) ExportTransitions(ctx context.Context, sink func(modelstore.Tran
 	}
 
 	slices.SortFunc(records, func(left, right modelstore.TransitionCount) int {
-		if result := compareID(left.FromID, right.FromID); result != 0 {
+		if result := cmp.Compare(left.FromID, right.FromID); result != 0 {
 			return result
 		}
 
-		return compareID(left.ToID, right.ToID)
+		return cmp.Compare(left.ToID, right.ToID)
 	})
 
 	for _, record := range records {
@@ -291,7 +292,7 @@ func (s *Store) Stats(ctx context.Context, fromID uint64) (modelstore.Stats, err
 	}
 
 	slices.SortFunc(stats.Candidates, func(left, right modelstore.CandidateStats) int {
-		return compareID(left.ClassID, right.ClassID)
+		return cmp.Compare(left.ClassID, right.ClassID)
 	})
 
 	return stats, nil
@@ -315,15 +316,4 @@ func cloneClass(class modelstore.Class) modelstore.Class {
 
 func sameClass(left, right modelstore.Class) bool {
 	return left.TypeTag == right.TypeTag && bytes.Equal(left.Payload, right.Payload)
-}
-
-func compareID(left, right uint64) int {
-	switch {
-	case left < right:
-		return -1
-	case left > right:
-		return 1
-	default:
-		return 0
-	}
 }

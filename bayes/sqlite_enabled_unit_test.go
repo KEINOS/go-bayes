@@ -115,7 +115,7 @@ func (s *temporaryModelStoreStub) Validate(context.Context) (sqlitestore.Metadat
 	return sqlitestore.Metadata{}, s.validateErr
 }
 
-func Test_resolveModelHasher(t *testing.T) {
+func TestResolveModelHasher(t *testing.T) {
 	t.Parallel()
 
 	dummyMetaData := new(sqlitestore.Metadata)

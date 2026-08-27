@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -190,7 +191,7 @@ func TestPrepareSaveDestination(t *testing.T) {
 	destination, err := prepareSaveDestination(ctx, "model.db", deps)
 	require.NoError(t, err)
 	require.Equal(t, saveTestModelPath, destination.path)
-	require.Equal(t, "/models", destination.directory)
+	require.Equal(t, filepath.FromSlash("/models"), destination.directory)
 	require.Equal(t, os.FileMode(0o400), destination.mode)
 	require.Same(t, lock, destination.lock)
 	require.Zero(t, lock.closeCalls)

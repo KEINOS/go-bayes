@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"iter"
 	"os"
 	"path/filepath"
@@ -16,6 +17,44 @@ import (
 )
 
 const modelCodecVersion = 1
+
+type saveDependencies struct {
+	acquirePathLock func(context.Context, string) (io.Closer, error)
+	canonicalPath   func(string) (string, error)
+	createStore     func(
+		context.Context,
+		string,
+		sqlitestore.Metadata,
+		sqlitestore.OpenConfig,
+	) (temporaryModelStore, error)
+	createTemp    func(string, string) (saveFile, error)
+	isOpenAlias   func(string) (bool, error)
+	openFile      func(string, int, os.FileMode) (saveFile, error)
+	remove        func(string) error
+	rename        func(string, string) error
+	stat          func(string) (os.FileInfo, error)
+	syncDirectory func(string) error
+}
+
+type saveDestination struct {
+	lock      io.Closer
+	directory string
+	path      string
+	mode      os.FileMode
+}
+
+type saveFile interface {
+	io.Closer
+	Chmod(mode os.FileMode) error
+	Name() string
+	Sync() error
+}
+
+type temporaryModelStore interface {
+	Close() error
+	Import(ctx context.Context, classes []modelstore.Class, source modelstore.ModelStore) error
+	Validate(ctx context.Context) (sqlitestore.Metadata, error)
+}
 
 //nolint:funlen // load validates and transfers one complete model with explicit cleanup.
 func loadSQLiteModel(ctx context.Context, path string, injected Hasher) (*Predictor, error) {
@@ -146,69 +185,41 @@ func openSQLiteModel(ctx context.Context, path string, config PredictorConfig) (
 	return predictor, nil
 }
 
-//nolint:cyclop,funlen // atomic replacement keeps every cleanup and durability boundary explicit.
-func saveModel(ctx context.Context, predictor *Predictor, path string) error {
-	if predictor.store == nil {
-		return errPredictorNotInitialized
+func defaultSaveDependencies() saveDependencies {
+	return saveDependencies{
+		acquirePathLock: func(ctx context.Context, path string) (io.Closer, error) {
+			return sqlitestore.AcquirePathLock(ctx, path)
+		},
+		canonicalPath: sqlitestore.CanonicalPath,
+		createStore: func(
+			ctx context.Context,
+			path string,
+			metadata sqlitestore.Metadata,
+			config sqlitestore.OpenConfig,
+		) (temporaryModelStore, error) {
+			return sqlitestore.Create(ctx, path, metadata, config)
+		},
+		createTemp: func(directory, pattern string) (saveFile, error) {
+			return os.CreateTemp(directory, pattern)
+		},
+		isOpenAlias: sqlitestore.IsOpenAlias,
+		openFile: func(path string, flag int, mode os.FileMode) (saveFile, error) {
+			return os.OpenFile(path, flag, mode) // #nosec G304 -- path comes from CreateTemp above.
+		},
+		remove:        os.Remove,
+		rename:        os.Rename,
+		stat:          os.Stat,
+		syncDirectory: syncDirectory,
 	}
+}
 
-	if path == "" {
-		return fmt.Errorf("%w: save path must not be empty", errStorageConfig)
-	}
-
-	destinationPath, err := sqlitestore.CanonicalPath(path)
-	if err != nil {
-		return fmt.Errorf("failed to resolve save destination: %w", err)
-	}
-
-	destinationLock, err := sqlitestore.AcquirePathLock(ctx, destinationPath)
-	if err != nil {
-		return wrapSQLiteOpenError(err)
-	}
-	defer func() { _ = destinationLock.Close() }()
-
-	active, err := sqlitestore.IsOpenAlias(destinationPath)
-	if err != nil {
-		return fmt.Errorf("failed to inspect active model paths: %w", err)
-	}
-
-	if active {
-		return fmt.Errorf("%w: destination is an active model", ErrModelLocked)
-	}
-
-	mode := os.FileMode(fileModePrivate) // default to owner-only access.
-	info, statErr := os.Stat(destinationPath)
-	if statErr == nil {
-		mode = info.Mode().Perm()
-	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return fmt.Errorf("failed to inspect save destination: %w", statErr)
-	}
-
-	directory := filepath.Dir(destinationPath)
-
-	temporary, err := os.CreateTemp(directory, ".go-bayes-*.db")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary model: %w", err)
-	}
-
-	temporaryPath := filepath.Clean(temporary.Name())
-
-	err = temporary.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close temporary model placeholder: %w", err)
-	}
-
-	err = os.Remove(temporaryPath)
-	if err != nil {
-		return fmt.Errorf("failed to prepare temporary model path: %w", err)
-	}
-
-	defer func() {
-		_ = os.Remove(temporaryPath)
-		_ = os.Remove(temporaryPath + ".go-bayes.lock")
-	}()
-
-	temporaryStore, err := sqlitestore.Create(
+func exportTemporaryModel(
+	ctx context.Context,
+	predictor *Predictor,
+	temporaryPath string,
+	deps saveDependencies,
+) error {
+	temporaryStore, err := deps.createStore(
 		ctx,
 		temporaryPath,
 		metadataFor(predictor.hasher, predictor.ID()),
@@ -222,22 +233,149 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 	if err == nil {
 		err = temporaryStore.Import(ctx, classes, predictor.store)
 	}
-
 	if err == nil {
 		_, err = temporaryStore.Validate(ctx)
 	}
 
 	closeErr := temporaryStore.Close()
-
 	if err != nil {
 		return fmt.Errorf("failed to export model: %w", err)
 	}
-
 	if closeErr != nil {
 		return fmt.Errorf("failed to close temporary model: %w", closeErr)
 	}
 
-	temporaryFile, err := os.OpenFile(temporaryPath, os.O_RDWR, 0)
+	return nil
+}
+
+func prepareSaveDestination(
+	ctx context.Context,
+	path string,
+	deps saveDependencies,
+) (saveDestination, error) {
+	if path == "" {
+		return saveDestination{}, fmt.Errorf("%w: save path must not be empty", errStorageConfig)
+	}
+
+	destinationPath, err := deps.canonicalPath(path)
+	if err != nil {
+		return saveDestination{}, fmt.Errorf("failed to resolve save destination: %w", err)
+	}
+
+	destinationLock, err := deps.acquirePathLock(ctx, destinationPath)
+	if err != nil {
+		return saveDestination{}, wrapSQLiteOpenError(err)
+	}
+
+	active, err := deps.isOpenAlias(destinationPath)
+	if err != nil {
+		_ = destinationLock.Close()
+
+		return saveDestination{}, fmt.Errorf("failed to inspect active model paths: %w", err)
+	}
+	if active {
+		_ = destinationLock.Close()
+
+		return saveDestination{}, fmt.Errorf("%w: destination is an active model", ErrModelLocked)
+	}
+
+	mode := os.FileMode(fileModePrivate)
+	info, statErr := deps.stat(destinationPath)
+	if statErr == nil {
+		mode = info.Mode().Perm()
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		_ = destinationLock.Close()
+
+		return saveDestination{}, fmt.Errorf("failed to inspect save destination: %w", statErr)
+	}
+
+	return saveDestination{
+		lock:      destinationLock,
+		directory: filepath.Dir(destinationPath),
+		path:      destinationPath,
+		mode:      mode,
+	}, nil
+}
+
+func prepareTemporaryModelPath(directory string, deps saveDependencies) (string, error) {
+	temporary, err := deps.createTemp(directory, ".go-bayes-*.db")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary model: %w", err)
+	}
+
+	temporaryPath := filepath.Clean(temporary.Name())
+
+	err = temporary.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close temporary model placeholder: %w", err)
+	}
+
+	err = deps.remove(temporaryPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare temporary model path: %w", err)
+	}
+
+	return temporaryPath, nil
+}
+
+func replaceSavedModel(temporaryPath string, destination saveDestination, deps saveDependencies) error {
+	err := deps.rename(temporaryPath, destination.path)
+	if err != nil {
+		return fmt.Errorf("failed to replace saved model: %w", err)
+	}
+
+	err = deps.syncDirectory(destination.directory)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrSaveDurabilityUnknown, err)
+	}
+
+	return nil
+}
+
+func saveModel(ctx context.Context, predictor *Predictor, path string) error {
+	return saveModelWithDependencies(ctx, predictor, path, defaultSaveDependencies())
+}
+
+func saveModelWithDependencies(
+	ctx context.Context,
+	predictor *Predictor,
+	path string,
+	deps saveDependencies,
+) error {
+	if predictor.store == nil {
+		return errPredictorNotInitialized
+	}
+
+	destination, err := prepareSaveDestination(ctx, path, deps)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = destination.lock.Close() }()
+
+	temporaryPath, err := prepareTemporaryModelPath(destination.directory, deps)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = deps.remove(temporaryPath)
+		_ = deps.remove(temporaryPath + ".go-bayes.lock")
+	}()
+
+	err = exportTemporaryModel(ctx, predictor, temporaryPath, deps)
+	if err != nil {
+		return err
+	}
+
+	err = syncSavedModelFile(temporaryPath, destination.mode, deps)
+	if err != nil {
+		return err
+	}
+
+	return replaceSavedModel(temporaryPath, destination, deps)
+}
+
+func syncSavedModelFile(path string, mode os.FileMode, deps saveDependencies) error {
+	temporaryFile, err := deps.openFile(path, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary model for sync: %w", err)
 	}
@@ -248,20 +386,9 @@ func saveModel(ctx context.Context, predictor *Predictor, path string) error {
 	}
 
 	syncErr := temporaryFile.Sync()
-
-	closeErr = temporaryFile.Close()
+	closeErr := temporaryFile.Close()
 	if syncErr != nil || closeErr != nil {
 		return fmt.Errorf("failed to sync temporary model: %w", errors.Join(syncErr, closeErr))
-	}
-
-	err = os.Rename(temporaryPath, destinationPath)
-	if err != nil {
-		return fmt.Errorf("failed to replace saved model: %w", err)
-	}
-
-	err = syncDirectory(directory)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrSaveDurabilityUnknown, err)
 	}
 
 	return nil

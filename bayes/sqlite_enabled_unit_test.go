@@ -241,7 +241,7 @@ func TestPrepareTemporaryModelPath(t *testing.T) {
 		configure func(*saveDependencies, *saveFileStub)
 		wantPath  string
 	}{
-		saveSuccessCase: {wantPath: saveTestTemporary},
+		saveSuccessCase: {wantPath: filepath.FromSlash(saveTestTemporary)},
 		"create": {
 			configure: func(deps *saveDependencies, _ *saveFileStub) {
 				deps.createTemp = func(string, string) (saveFile, error) { return nil, errTestSaveFailed }
